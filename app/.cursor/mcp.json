@@ -1,0 +1,13 @@
+{
+    "mcpServers": {
+      "supabase": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@supabase/mcp-server-supabase@latest",
+          "--project-url=https://mmlzlnvbwuwffaakscvm.supabase.co",
+          "--anon-key=sb_publishable_jAcSv5h844hiP9nNApoE2A_C6xjEB-d"
+        ]
+      }
+    }
+  }
