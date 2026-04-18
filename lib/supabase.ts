@@ -1,22 +1,30 @@
-import { createClient } from "@supabase/supabase-js"
+import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 
-const supabaseUrl =
-  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://mmlzlnvbwuwffaakscvm.supabase.co"
+let supabaseClient: SupabaseClient | null | undefined = undefined
 
-const supabaseAnonKey =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "sb_publishable_jAcSv5h844hiP9nNApoE2A_C6xjEB-d"
+export const getSupabase = (): SupabaseClient | null => {
+  if (supabaseClient !== undefined) return supabaseClient
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error("Supabase env is not configured correctly")
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !key) {
+    supabaseClient = null
+    return null
+  }
+
+  supabaseClient = createClient(url, key, {
+    global: {
+      fetch: (input, init) =>
+        fetch(input, {
+          ...init,
+          mode: "cors",
+          credentials: "omit",
+        }),
+    },
+  })
+
+  return supabaseClient
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  global: {
-    fetch: (input, init) =>
-      fetch(input, {
-        ...init,
-        mode: "cors",
-        credentials: "omit",
-      }),
-  },
-})
+// Optional named export for compatibility / convenience.
+export const supabase = getSupabase()

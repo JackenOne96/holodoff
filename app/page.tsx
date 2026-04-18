@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic"
 
 import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
+import { useRouter } from "next/navigation"
 import { RefrigeratorIcon, ClipboardList } from "lucide-react"
 import { FridgeHeader } from "@/components/fridge-header"
 import { ShoppingList } from "@/components/shopping-list"
@@ -22,6 +23,7 @@ import { Plus, ShoppingCart } from "lucide-react"
 import { parseProductInput } from "@/lib/parseProductInput"
 
 export default function HomePage() {
+  const router = useRouter()
   const { userName, setUserName, addToShopping, hasJoined, initialize, isHydrated, isLoading, error, bypassLogin } = useFridgeStore()
   const [mounted, setMounted] = useState(false)
   const [showNameModal, setShowNameModal] = useState(false)
@@ -57,6 +59,7 @@ export default function HomePage() {
     const success = await setUserName(profile)
     if (success) {
       setShowNameModal(false)
+      router.replace("/")
     }
   }
 

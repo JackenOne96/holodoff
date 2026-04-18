@@ -2,7 +2,7 @@
 
 import { create } from "zustand"
 import { persist, createJSONStorage } from "zustand/middleware"
-import { supabase } from "@/lib/supabase"
+import { getSupabase } from "@/lib/supabase"
 import { getProductIcon } from "@/constants/productsDatabase"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 
@@ -258,6 +258,10 @@ const buildHistory = (items: DbShoppingItem[]): PurchaseHistoryEntry[] =>
     .sort((a, b) => b.purchasedAt.localeCompare(a.purchasedAt))
 
 const loadFamilyData = async (familyId: string) => {
+  const supabase = getSupabase()
+  if (!supabase) {
+    return { familyMembers: [], shoppingList: [], history: [], messages: [] }
+  }
   const since = new Date()
   since.setDate(since.getDate() - 3)
   const sinceIso = since.toISOString()
@@ -291,7 +295,10 @@ const loadFamilyData = async (familyId: string) => {
 
 const stopRealtime = async () => {
   if (familyChannel) {
-    await supabase.removeChannel(familyChannel)
+    const supabase = getSupabase()
+    if (supabase) {
+      await supabase.removeChannel(familyChannel)
+    }
     familyChannel = null
   }
 }
@@ -308,6 +315,9 @@ const scheduleRefresh = (refresh: () => Promise<void>) => {
 
 const startRealtime = async (familyId: string, refresh: () => Promise<void>) => {
   await stopRealtime()
+
+  const supabase = getSupabase()
+  if (!supabase) return
 
   familyChannel = supabase
     .channel(`family-realtime-${familyId}`)
@@ -420,6 +430,11 @@ export const useFridgeStore = create<FridgeState>()(
       },
 
       joinFamily: async (code: string) => {
+        const supabase = getSupabase()
+        if (!supabase) {
+          set({ isLoading: false, error: "Supabase env is not configured" })
+          return false
+        }
         const normalizedCode = code.trim().toUpperCase()
         if (normalizedCode === "123456") {
           get().bypassLogin()
@@ -466,6 +481,7 @@ export const useFridgeStore = create<FridgeState>()(
       },
 
       setUserName: async (profile: UserProfileSetup) => {
+        const supabase = getSupabase()
         const { familyId, familyMembers, isBypassMode } = get()
         const trimmedName = formatDisplayName(profile.name)
         if (isBypassMode) {
@@ -487,6 +503,7 @@ export const useFridgeStore = create<FridgeState>()(
         }
 
         if (!familyId) return false
+        if (!supabase) return false
 
         set({ isLoading: true, error: null })
 
@@ -528,11 +545,14 @@ export const useFridgeStore = create<FridgeState>()(
         set({
           userName: createdMember.name,
           currentMemberId: createdMember.id,
+          isLoading: false,
+          error: null,
         })
         return true
       },
 
       addToShopping: async (input: { name: string; emoji?: string; quantity?: number; unit?: string }) => {
+        const supabase = getSupabase()
         const { familyId, currentMemberId, isBypassMode } = get()
         const desiredQuantity = input.quantity ?? 1
         const desiredUnit = input.unit ?? "шт"
@@ -568,6 +588,7 @@ export const useFridgeStore = create<FridgeState>()(
         }
 
         if (!familyId || !currentMemberId) return
+        if (!supabase) return
 
         const normalizedName = formatDisplayName(input.name)
         const existing = get().shoppingList.find((p) => p.name.toLowerCase() === normalizedName.toLowerCase() && p.unit === desiredUnit)
@@ -605,6 +626,7 @@ export const useFridgeStore = create<FridgeState>()(
       },
 
       removeFromShopping: async (id: string) => {
+        const supabase = getSupabase()
         if (get().isBypassMode) {
           set((state) => {
             const item = state.shoppingList.find((product) => product.id === id)
@@ -624,6 +646,8 @@ export const useFridgeStore = create<FridgeState>()(
           return
         }
 
+        if (!supabase) return
+
         const { error } = await supabase
           .from("shopping_items")
           .update({ purchased: true, purchased_at: new Date().toISOString() })
@@ -638,6 +662,7 @@ export const useFridgeStore = create<FridgeState>()(
       },
 
       markAllShoppingPurchased: async () => {
+        const supabase = getSupabase()
         const { shoppingList, isBypassMode, familyId } = get()
         if (shoppingList.length === 0) return
 
@@ -659,6 +684,7 @@ export const useFridgeStore = create<FridgeState>()(
         }
 
         if (!familyId) return
+        if (!supabase) return
 
         const ids = shoppingList.map((p) => p.id)
         const { error } = await supabase
@@ -679,7 +705,10 @@ export const useFridgeStore = create<FridgeState>()(
       signOutFromProfile: async () => {
         await stopRealtime()
         try {
-          await supabase.auth.signOut()
+          const supabase = getSupabase()
+          if (supabase) {
+            await supabase.auth.signOut()
+          }
         } catch {
           // session may be absent
         }
@@ -700,12 +729,14 @@ export const useFridgeStore = create<FridgeState>()(
       },
 
       clearHistory: async () => {
+        const supabase = getSupabase()
         const { familyId, isBypassMode } = get()
         if (isBypassMode) {
           set({ history: [] })
           return true
         }
         if (!familyId) return false
+        if (!supabase) return false
 
         set({ isLoading: true, error: null })
         const { error } = await supabase
@@ -725,6 +756,7 @@ export const useFridgeStore = create<FridgeState>()(
       },
 
       addMessage: async (text: string, _sender: string, isSystem = false) => {
+        const supabase = getSupabase()
         const { familyId, currentMemberId, isBypassMode, userName } = get()
         if (isBypassMode) {
           set((state) => ({
@@ -744,6 +776,7 @@ export const useFridgeStore = create<FridgeState>()(
         }
 
         if (!familyId || !currentMemberId) return
+        if (!supabase) return
 
         const payloadText = isSystem ? `${SYSTEM_MESSAGE_PREFIX}${text}` : text
 
