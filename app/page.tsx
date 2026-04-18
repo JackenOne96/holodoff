@@ -21,10 +21,12 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Plus, ShoppingCart } from "lucide-react"
 import { parseProductInput } from "@/lib/parseProductInput"
+import { getSettings } from "@/components/settings-modal"
 
 export default function HomePage() {
   const router = useRouter()
-  const { userName, setUserName, addToShopping, hasJoined, initialize, isHydrated, isLoading, error, bypassLogin } = useFridgeStore()
+  const { userName, setUserName, addToShopping, hasJoined, initialize, isHydrated, isLoading, error, bypassLogin, incomingSignal, clearIncomingSignal } =
+    useFridgeStore()
   const [mounted, setMounted] = useState(false)
   const [showNameModal, setShowNameModal] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
@@ -54,6 +56,34 @@ export default function HomePage() {
       setShowNameModal(true)
     }
   }, [mounted, userName, hasJoined])
+
+  useEffect(() => {
+    if (!incomingSignal) return
+
+    const settings = getSettings()
+    if (settings.notificationsEnabled) {
+      try {
+        const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+        const oscillator = audioContext.createOscillator()
+        const gainNode = audioContext.createGain()
+        oscillator.connect(gainNode)
+        gainNode.connect(audioContext.destination)
+
+        const volume = (settings.volume / 100) * 0.25
+        oscillator.type = "sine"
+        oscillator.frequency.value = incomingSignal.type === "alert" ? 2200 : incomingSignal.type === "ok" ? 1200 : 1000
+        gainNode.gain.setValueAtTime(volume, audioContext.currentTime)
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2)
+        oscillator.start(audioContext.currentTime)
+        oscillator.stop(audioContext.currentTime + 0.2)
+      } catch {
+        // ignore
+      }
+    }
+
+    const t = window.setTimeout(() => clearIncomingSignal(), 3500)
+    return () => window.clearTimeout(t)
+  }, [incomingSignal, clearIncomingSignal])
 
   const handleNameSubmit = async (profile: { name: string; gender: "male" | "female"; avatar: string }) => {
     try {
@@ -120,6 +150,31 @@ export default function HomePage() {
       <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-b from-blue-50 to-cyan-100/50">
       {/* Name Modal */}
       {showNameModal && <NameModal onSubmit={handleNameSubmit} />}
+
+      {incomingSignal && (
+        <motion.div
+          key={incomingSignal.id}
+          initial={{ opacity: 0, y: -16 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          className="pointer-events-none fixed left-3 right-3 top-3 z-50"
+        >
+          <div
+            className={`mx-auto max-w-md rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg ${
+              incomingSignal.type === "alert"
+                ? "bg-red-500 text-white"
+                : incomingSignal.type === "ok"
+                  ? "bg-emerald-500 text-white"
+                  : "bg-yellow-400 text-gray-900"
+            }`}
+          >
+            {incomingSignal.type === "alert" && "❗️ Внимание"}
+            {incomingSignal.type === "ok" && "✅ Всё купил"}
+            {incomingSignal.type === "store" && "🛒 В магазине"}
+            <span className="ml-2 text-xs font-medium opacity-90">от {incomingSignal.senderName}</span>
+          </div>
+        </motion.div>
+      )}
 
       {/* History Modal */}
       <HistoryModal isOpen={showHistory} onClose={() => setShowHistory(false)} />

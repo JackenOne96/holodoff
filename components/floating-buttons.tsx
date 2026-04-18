@@ -20,7 +20,7 @@ export function FloatingButtons() {
   const [dialogMessage, setDialogMessage] = useState("")
   const [isShaking, setIsShaking] = useState(false)
   const [inStoreMode, setInStoreMode] = useState(false)
-  const { addMessage, userName, markAllShoppingPurchased } = useFridgeStore()
+  const { addMessage, userName, markAllShoppingPurchased, broadcastSignal } = useFridgeStore()
 
   const playSound = (type: "alert" | "ok" | "store") => {
     const settings = getSettings()
@@ -92,6 +92,7 @@ export function FloatingButtons() {
     setIsShaking(true)
     vibrate([200, 100, 200])
     playSound("alert")
+    await broadcastSignal("alert")
     await pushNotify("ХолодOFF: Внимание", "Кто-то отправил срочное уведомление семье")
     await addMessage(`${initial} просит срочно заглянуть в список!`, "Система", true)
 
@@ -106,6 +107,7 @@ export function FloatingButtons() {
     vibrate([100])
     playSound("ok")
     await markAllShoppingPurchased()
+    await broadcastSignal("ok")
     await pushNotify("ХолодOFF: Всё купил", "Покупки подтверждены")
     await addMessage(`${initial} подтвердил(а) покупку`, "Система", true)
     setDialogMessage("Подтверждение отправлено!")
@@ -119,6 +121,7 @@ export function FloatingButtons() {
     if (newMode) {
       vibrate([100, 50, 100])
       playSound("store")
+      await broadcastSignal("store")
       await pushNotify("ХолодOFF: В магазине", "Пользователь сейчас в магазине")
       await addMessage(`${initial} сейчас в магазине! Пишите, что нужно купить.`, "Система", true)
       setDialogMessage("Все члены семьи уведомлены!")

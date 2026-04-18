@@ -35,8 +35,20 @@ const AVATAR_COLORS = [
 
 const SYSTEM_MESSAGE_PREFIX = "__system__::"
 let familyChannel: RealtimeChannel | null = null
+let broadcastChannel: RealtimeChannel | null = null
 let refreshTimer: ReturnType<typeof setTimeout> | null = null
 const memoryStorage = new Map<string, string>()
+
+type FamilySignalType = "alert" | "ok" | "store"
+
+export type IncomingFamilySignal = {
+  id: string
+  type: FamilySignalType
+  familyId: string
+  senderMemberId: string
+  senderName: string
+  createdAt: string
+}
 
 const safeStorage = createJSONStorage(() => {
   if (typeof window === "undefined") {
@@ -130,6 +142,7 @@ export interface ChatMessage {
   text: string
   sender: string
   senderAvatar: string
+  senderId: string | null
   timestamp: string
   isSystem?: boolean
 }
@@ -185,6 +198,10 @@ interface FridgeState {
 
   messages: ChatMessage[]
   addMessage: (text: string, sender: string, isSystem?: boolean) => Promise<void>
+
+  incomingSignal: IncomingFamilySignal | null
+  clearIncomingSignal: () => void
+  broadcastSignal: (type: FamilySignalType) => Promise<void>
 }
 
 const calculateExpiryDate = (productName: string): string => {
@@ -241,6 +258,7 @@ const mapChatMessages = (messages: DbChatMessage[], membersById: Map<string, DbF
         ? "Система"
         : getInitial(membersById.get(message.sender_id || "")?.avatar_letter || membersById.get(message.sender_id || "")?.name),
       senderAvatar: isSystem ? "⚠️" : membersById.get(message.sender_id || "")?.avatar_icon || "🙂",
+      senderId: message.sender_id,
       timestamp: message.created_at,
       isSystem,
     }
@@ -301,6 +319,14 @@ const stopRealtime = async () => {
     }
     familyChannel = null
   }
+
+  if (broadcastChannel) {
+    const supabase = getSupabase()
+    if (supabase) {
+      await supabase.removeChannel(broadcastChannel)
+    }
+    broadcastChannel = null
+  }
 }
 
 const scheduleRefresh = (refresh: () => Promise<void>) => {
@@ -337,6 +363,32 @@ const startRealtime = async (familyId: string, refresh: () => Promise<void>) => 
       () => scheduleRefresh(refresh)
     )
     .subscribe()
+
+  // Broadcast channel for button "signals" (Внимание / Всё купил / В магазине)
+  broadcastChannel = supabase
+    .channel("family_channel", {
+      config: {
+        broadcast: { self: false },
+      },
+    })
+    .on("broadcast", { event: "signal" }, (payload) => {
+      const data = payload.payload as Partial<IncomingFamilySignal> | undefined
+      const state = get()
+      if (!data || !data.familyId || data.familyId !== familyId) return
+      if (data.senderMemberId && state.currentMemberId && data.senderMemberId === state.currentMemberId) return
+
+      set({
+        incomingSignal: {
+          id: data.id || `sig-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          type: (data.type as FamilySignalType) || "alert",
+          familyId: data.familyId,
+          senderMemberId: data.senderMemberId || "unknown",
+          senderName: data.senderName || "Кто-то",
+          createdAt: data.createdAt || new Date().toISOString(),
+        },
+      })
+    })
+    .subscribe()
 }
 
 export const useFridgeStore = create<FridgeState>()(
@@ -357,6 +409,32 @@ export const useFridgeStore = create<FridgeState>()(
       shoppingList: [],
       history: [],
       messages: [],
+
+      incomingSignal: null,
+      clearIncomingSignal: () => set({ incomingSignal: null }),
+      broadcastSignal: async (type: FamilySignalType) => {
+        const supabase = getSupabase()
+        const { familyId, currentMemberId, userName, isBypassMode } = get()
+        if (isBypassMode) return
+        if (!supabase || !familyId || !currentMemberId) return
+
+        try {
+          await supabase.channel("family_channel").send({
+            type: "broadcast",
+            event: "signal",
+            payload: {
+              id: `sig-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              type,
+              familyId,
+              senderMemberId: currentMemberId,
+              senderName: userName || "Кто-то",
+              createdAt: new Date().toISOString(),
+            } satisfies IncomingFamilySignal,
+          })
+        } catch (err) {
+          console.error("Failed to broadcast signal", err)
+        }
+      },
       bypassLogin: () => {
         set({
           isBypassMode: true,
@@ -764,6 +842,7 @@ export const useFridgeStore = create<FridgeState>()(
                 text,
                 sender: isSystem ? "Система" : getInitial(userName || "Т"),
                 senderAvatar: isSystem ? "⚠️" : "🙂",
+                senderId: isSystem ? null : currentMemberId || "dev-member",
                 timestamp: new Date().toISOString(),
                 isSystem,
               },

@@ -19,7 +19,7 @@ const userSounds: Record<string, number> = {
 const SEND_SOUND_FREQUENCY = 980
 
 export function Chat() {
-  const { messages, addMessage, userName } = useFridgeStore()
+  const { messages, addMessage, userName, currentMemberId } = useFridgeStore()
   const [newMessage, setNewMessage] = useState("")
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const prevMessageCount = useRef(messages.length)
@@ -120,8 +120,8 @@ export function Chat() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className={`mb-2 flex gap-2 ${
-                message.isSystem ? "justify-center" : ""
+              className={`mb-2 flex ${
+                message.isSystem ? "justify-center" : message.senderId && currentMemberId && message.senderId === currentMemberId ? "justify-end" : "justify-start"
               }`}
             >
               {message.isSystem ? (
@@ -130,19 +130,28 @@ export function Chat() {
                   <span>{message.text}</span>
                 </div>
               ) : (
-                <>
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-orange-400 to-pink-400 text-xs font-medium text-white">
-                    {message.senderAvatar || message.sender}
-                  </div>
-                  <div className="flex-1">
-                    <div className="inline-block rounded-2xl rounded-tl-sm bg-white px-3 py-2 shadow-sm">
-                      <p className="text-sm text-gray-800">{message.text}</p>
+                (() => {
+                  const isMine = Boolean(message.senderId && currentMemberId && message.senderId === currentMemberId)
+                  return (
+                    <div className={`flex max-w-[85%] gap-2 ${isMine ? "flex-row-reverse" : "flex-row"}`}>
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-orange-400 to-pink-400 text-xs font-medium text-white">
+                        {message.senderAvatar || message.sender}
+                      </div>
+                      <div className={`flex min-w-0 flex-col ${isMine ? "items-end" : "items-start"}`}>
+                        <div
+                          className={`inline-block rounded-2xl px-3 py-2 shadow-sm ${
+                            isMine ? "rounded-tr-sm bg-emerald-500/90 text-white" : "rounded-tl-sm bg-white text-gray-800"
+                          }`}
+                        >
+                          <p className="break-words text-sm">{message.text}</p>
+                        </div>
+                        <p className="mt-0.5 text-[10px] text-orange-600/50">
+                          {message.sender} · {formatTime(message.timestamp)}
+                        </p>
+                      </div>
                     </div>
-                    <p className="mt-0.5 text-[10px] text-orange-600/50">
-                      {formatTime(message.timestamp)}
-                    </p>
-                  </div>
-                </>
+                  )
+                })()
               )}
             </motion.div>
           ))}
