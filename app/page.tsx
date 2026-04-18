@@ -12,7 +12,6 @@ import { HistoryModal } from "@/components/history-modal"
 import { JoinScreen } from "@/components/join-screen"
 import { NutritionCounter } from "@/components/nutrition-counter"
 import { AppErrorBoundary } from "@/components/app-error-boundary"
-import { DebugBadge } from "@/components/debug-badge"
 import { useFridgeStore } from "@/lib/store"
 import { getNutritionForProduct } from "@/constants/productsDatabase"
 import { Input } from "@/components/ui/input"
@@ -149,8 +148,13 @@ export default function HomePage() {
         </div>
       )}
 
-      <div className="flex-1 overflow-hidden px-3">
-        <ShoppingList onAddNutrition={handleAddNutrition} />
+      <div className="flex min-h-0 flex-1 flex-row gap-2 overflow-x-hidden overflow-y-hidden px-3">
+        <div className="min-w-0 basis-[70%] overflow-hidden">
+          <ShoppingList onAddNutrition={handleAddNutrition} />
+        </div>
+        <div className="flex min-w-0 basis-[30%] flex-col overflow-hidden border-l border-white/40 pl-2">
+          <FloatingButtons />
+        </div>
       </div>
 
       <div className="relative z-20 shrink-0 px-3 pb-2 pt-1">
@@ -176,10 +180,7 @@ export default function HomePage() {
         </form>
       </div>
 
-      <FloatingButtons />
-
       <Chat />
-      <DebugBadge />
       </div>
     </AppErrorBoundary>
   )

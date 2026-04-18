@@ -1,4 +1,4 @@
-import { getProductKeyMatch, normalizeProductName } from "@/constants/productsDatabase"
+import { getProductMatchByFirstDictionaryWord, normalizeProductName } from "@/constants/productsDatabase"
 
 export type Unit = string
 
@@ -28,11 +28,17 @@ const normalizeUnit = (raw: string): string | null => {
   return null
 }
 
-const toTitle = (value: string) =>
-  value.trim().length === 0 ? value : value.trim().charAt(0).toUpperCase() + value.trim().slice(1)
+const UNIT_TOKEN_PATTERN =
+  "(?:кг|килограмм(?:а|ов)?|г|гр|грамм(?:а|ов)?|л|литр(?:а|ов)?|мл|миллилитр(?:а|ов)?|шт|штук|штуки|пачка|пачки|пачек|упаковка|упаковки|упаковок|уп|упак)"
+
+const QUANTITY_WITH_UNIT_RE = new RegExp(
+  String.raw`(?:(?<=^)|(?<=\s))\d+(?:[.,]\d+)?(?:\s*(?:${UNIT_TOKEN_PATTERN}))?(?=\s|$)`,
+  "giu"
+)
 
 export function parseProductInput(input: string): ParsedProduct | null {
-  const raw = normalizeProductName(input)
+  const trimmedInput = input.trim()
+  const raw = normalizeProductName(trimmedInput)
   if (!raw) return null
 
   let quantity: number | null = null
@@ -42,16 +48,6 @@ export function parseProductInput(input: string): ParsedProduct | null {
     const num = Number(v.replace(",", "."))
     return Number.isFinite(num) && num > 0 ? num : null
   }
-
-  // Find first occurrence of: [number] [unit?] anywhere in the string.
-  // We intentionally keep the detected unit token as-written (e.g. "упаковок", "литра") for display and equality checks.
-  // Supported units stay the same as `UNIT_ALIASES`.
-  const UNIT_TOKEN_PATTERN =
-    "(?:кг|килограмм(?:а|ов)?|г|гр|грамм(?:а|ов)?|л|литр(?:а|ов)?|мл|миллилитр(?:а|ов)?|шт|штук|штуки|пачка|пачки|пачек|упаковка|упаковки|упаковок|уп|упак)"
-  const QUANTITY_WITH_UNIT_RE = new RegExp(
-    String.raw`(?:(?<=^)|(?<=\s))\d+(?:[.,]\d+)?(?:\s*(?:${UNIT_TOKEN_PATTERN}))?(?=\s|$)`,
-    "giu"
-  )
 
   const firstMatch = raw.match(QUANTITY_WITH_UNIT_RE)?.[0] ?? null
   if (firstMatch) {
@@ -63,8 +59,6 @@ export function parseProductInput(input: string): ParsedProduct | null {
     if (q !== null) quantity = q
 
     if (unitPart) {
-      // Extra guard: only treat it as unit if it's one of our supported aliases.
-      // (In practice unitPart already matches the pattern above.)
       if (normalizeUnit(unitPart)) unit = unitPart
     }
   }
@@ -72,14 +66,23 @@ export function parseProductInput(input: string): ParsedProduct | null {
   if (quantity === null) quantity = 1
   if (unit === null) unit = "шт"
 
-  // Name is what's left after removing the first found number+unit fragment (if any).
-  // For simplicity we remove the whole matched fragment; additional numbers are left intact.
-  const nameCandidate = (firstMatch ? raw.replace(firstMatch, " ") : raw).replace(/\s+/g, " ").trim() || raw
+  let nameFromUser = trimmedInput
+  if (firstMatch) {
+    const origMatch = trimmedInput.match(
+      new RegExp(String.raw`(?:(?<=^)|(?<=\s))\d+(?:[.,]\d+)?(?:\s*(?:${UNIT_TOKEN_PATTERN}))?(?=\s|$)`, "giu")
+    )
+    if (origMatch?.[0]) {
+      nameFromUser = trimmedInput.replace(origMatch[0], " ").replace(/\s+/g, " ").trim()
+    }
+  }
+  if (!nameFromUser) nameFromUser = trimmedInput
 
-  const match = getProductKeyMatch(nameCandidate)
-  const canonicalName = match ? match.key : nameCandidate
+  if (!normalizeProductName(nameFromUser)) return null
+
+  const match = getProductMatchByFirstDictionaryWord(nameFromUser)
   const emoji = match ? match.item.icon : "📦"
-  const displayName = toTitle(canonicalName)
+  const displayName = nameFromUser
+  const canonicalName = match?.key ?? normalizeProductName(nameFromUser)
 
   return {
     displayName,
@@ -89,4 +92,3 @@ export function parseProductInput(input: string): ParsedProduct | null {
     unit,
   }
 }
-

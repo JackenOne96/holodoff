@@ -20,7 +20,7 @@ export function FloatingButtons() {
   const [dialogMessage, setDialogMessage] = useState("")
   const [isShaking, setIsShaking] = useState(false)
   const [inStoreMode, setInStoreMode] = useState(false)
-  const { addMessage, userName } = useFridgeStore()
+  const { addMessage, userName, markAllShoppingPurchased } = useFridgeStore()
 
   const playSound = (type: "alert" | "ok" | "store") => {
     const settings = getSettings()
@@ -30,7 +30,7 @@ export function FloatingButtons() {
       const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
       const oscillator = audioContext.createOscillator()
       const gainNode = audioContext.createGain()
-      
+
       oscillator.connect(gainNode)
       gainNode.connect(audioContext.destination)
 
@@ -38,7 +38,6 @@ export function FloatingButtons() {
 
       switch (type) {
         case "alert":
-          // Sharp, short, attention-grabbing beep
           oscillator.type = "sawtooth"
           oscillator.frequency.setValueAtTime(2200, audioContext.currentTime)
           gainNode.gain.setValueAtTime(Math.min(1, volume * 1.2), audioContext.currentTime)
@@ -95,7 +94,7 @@ export function FloatingButtons() {
     playSound("alert")
     await pushNotify("ХолодOFF: Внимание", "Кто-то отправил срочное уведомление семье")
     await addMessage(`${initial} просит срочно заглянуть в список!`, "Система", true)
-    
+
     setTimeout(() => {
       setIsShaking(false)
       setDialogMessage("Срочный сигнал отправлен!")
@@ -106,6 +105,7 @@ export function FloatingButtons() {
   const handleOk = async () => {
     vibrate([100])
     playSound("ok")
+    await markAllShoppingPurchased()
     await pushNotify("ХолодOFF: Всё купил", "Покупки подтверждены")
     await addMessage(`${initial} подтвердил(а) покупку`, "Система", true)
     setDialogMessage("Подтверждение отправлено!")
@@ -115,7 +115,7 @@ export function FloatingButtons() {
   const toggleStoreMode = async () => {
     const newMode = !inStoreMode
     setInStoreMode(newMode)
-    
+
     if (newMode) {
       vibrate([100, 50, 100])
       playSound("store")
@@ -126,63 +126,63 @@ export function FloatingButtons() {
     }
   }
 
-  // Button size reduced by 30%: was h-14 w-14, now h-10 w-10
-  // Icon size reduced by 30%: was h-6 w-6, now h-4 w-4
+  const btnClass =
+    "flex w-full min-h-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-2 text-[9px] font-semibold leading-tight text-white shadow-md sm:text-[10px]"
 
   return (
     <>
-      {/* Shake overlay for screen effect */}
       {isShaking && (
         <motion.div
           initial={{ opacity: 0 }}
-          animate={{ 
+          animate={{
             opacity: [0, 0.1, 0],
-            x: [0, -5, 5, -5, 5, 0]
+            x: [0, -5, 5, -5, 5, 0],
           }}
           transition={{ duration: 0.5 }}
           className="pointer-events-none fixed inset-0 z-40 bg-red-500"
         />
       )}
 
-      <div className="fixed left-3 right-3 z-30 grid grid-cols-3 gap-2" style={{ bottom: "calc(30% + 68px)" }}>
+      <div className="flex h-full min-h-0 w-full max-w-full flex-col gap-1.5 overflow-hidden py-0.5">
         <motion.button
+          type="button"
           onClick={handleAlert}
-          whileTap={{ scale: 0.9 }}
-          animate={isShaking ? { x: [0, -3, 3, -3, 3, 0] } : {}}
+          whileTap={{ scale: 0.95 }}
+          animate={isShaking ? { x: [0, -2, 2, -2, 2, 0] } : {}}
           transition={isShaking ? { duration: 0.5 } : {}}
-          className="flex h-10 items-center justify-center gap-1 rounded-full bg-red-500 px-2 text-xs font-semibold text-white shadow-lg shadow-red-500/30 transition-shadow hover:shadow-xl hover:shadow-red-500/40"
+          className={`${btnClass} shrink-0 bg-red-500 shadow-red-500/25 hover:shadow-lg`}
           title="Внимание"
         >
-          <AlertTriangle className="h-4 w-4" strokeWidth={2.5} />
-          <span>Внимание</span>
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" strokeWidth={2.5} />
+          <span className="max-w-full text-center break-words">Внимание</span>
         </motion.button>
 
         <motion.button
+          type="button"
           onClick={handleOk}
-          whileTap={{ scale: 0.9 }}
-          className="flex h-10 items-center justify-center gap-1 rounded-full px-2 text-xs font-semibold text-white shadow-lg transition-shadow hover:shadow-xl"
-          style={{ backgroundColor: "#22C55E", boxShadow: "0 10px 15px -3px rgba(34, 197, 94, 0.3)" }}
+          whileTap={{ scale: 0.95 }}
+          className={`${btnClass} shrink-0`}
+          style={{ backgroundColor: "#22C55E", boxShadow: "0 6px 12px -2px rgba(34, 197, 94, 0.35)" }}
           title="Всё купил"
         >
-          <CheckCheck className="h-4 w-4" />
-          <span>Всё купил</span>
+          <CheckCheck className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
+          <span className="max-w-full text-center break-words">Всё купил</span>
         </motion.button>
+
         <motion.button
+          type="button"
           onClick={toggleStoreMode}
           whileTap={{ scale: 0.95 }}
-          className={`flex h-10 items-center justify-center gap-1 rounded-full px-2 text-xs font-semibold text-white shadow-lg transition-all ${
-            inStoreMode 
-              ? "bg-yellow-600 shadow-yellow-700/40" 
-              : "bg-yellow-400 shadow-yellow-500/30 hover:shadow-xl hover:shadow-yellow-500/40"
+          className={`${btnClass} shrink-0 ${
+            inStoreMode ? "bg-yellow-600 shadow-yellow-700/30" : "bg-yellow-400 shadow-yellow-500/25 hover:shadow-lg"
           }`}
           title={inStoreMode ? "Активен" : "В магазине"}
         >
-          <Store className="h-4 w-4" />
-          <span>В магазине</span>
+          <Store className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
+          <span className="max-w-full text-center break-words">В магазине</span>
         </motion.button>
       </div>
 
-      {/* Confirmation dialog */}
       <AlertDialog open={showDialog} onOpenChange={setShowDialog}>
         <AlertDialogContent className="max-w-xs rounded-2xl">
           <AlertDialogHeader>
@@ -191,9 +191,7 @@ export function FloatingButtons() {
                 <Check className="h-5 w-5 text-green-600" />
               </span>
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-center text-base">
-              {dialogMessage}
-            </AlertDialogDescription>
+            <AlertDialogDescription className="text-center text-base">{dialogMessage}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="sm:justify-center">
             <AlertDialogAction className="rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 px-8 hover:from-blue-600 hover:to-cyan-600">

@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { Bell, Volume2, X, Bug, MessageSquare } from "lucide-react"
+import { Bell, Volume2, X, MessageSquare, LogOut } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
+import { useFridgeStore } from "@/lib/store"
 
 interface SettingsModalProps {
   isOpen: boolean
@@ -16,9 +17,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
   const [chatNotificationsEnabled, setChatNotificationsEnabled] = useState(true)
   const [volume, setVolume] = useState([70])
-  const [debugBadgeEnabled, setDebugBadgeEnabled] = useState(false)
+  const signOutFromProfile = useFridgeStore((s) => s.signOutFromProfile)
 
-  // Load settings from localStorage
   useEffect(() => {
     try {
       const savedSettings = localStorage.getItem("fridge-settings")
@@ -27,14 +27,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         setNotificationsEnabled(settings.notificationsEnabled ?? true)
         setChatNotificationsEnabled(settings.chatNotificationsEnabled ?? true)
         setVolume([settings.volume ?? 70])
-        setDebugBadgeEnabled(settings.debugBadgeEnabled ?? false)
       }
     } catch {
       // storage may be unavailable; keep defaults
     }
   }, [])
 
-  // Save settings to localStorage
   useEffect(() => {
     try {
       localStorage.setItem(
@@ -43,14 +41,18 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           notificationsEnabled,
           chatNotificationsEnabled,
           volume: volume[0],
-          debugBadgeEnabled,
         })
       )
       window.dispatchEvent(new Event("fridge-settings-changed"))
     } catch {
       // ignore
     }
-  }, [notificationsEnabled, chatNotificationsEnabled, volume, debugBadgeEnabled])
+  }, [notificationsEnabled, chatNotificationsEnabled, volume])
+
+  const handleSignOut = async () => {
+    await signOutFromProfile()
+    onClose()
+  }
 
   if (!isOpen) return null
 
@@ -71,18 +73,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       >
         <div className="mb-6 flex items-center justify-between">
           <h2 className="text-xl font-semibold text-gray-800">Настройки</h2>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            className="h-8 w-8 rounded-full"
-          >
+          <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 rounded-full">
             <X className="h-5 w-5" />
           </Button>
         </div>
 
         <div className="space-y-6">
-          {/* Notifications Toggle */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
@@ -93,13 +89,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 <p className="text-sm text-gray-500">Push-уведомления</p>
               </div>
             </div>
-            <Switch
-              checked={notificationsEnabled}
-              onCheckedChange={setNotificationsEnabled}
-            />
+            <Switch checked={notificationsEnabled} onCheckedChange={setNotificationsEnabled} />
           </div>
 
-          {/* Volume Slider */}
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
@@ -110,16 +102,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 <p className="text-sm text-gray-500">{volume[0]}%</p>
               </div>
             </div>
-            <Slider
-              value={volume}
-              onValueChange={setVolume}
-              max={100}
-              step={1}
-              className="w-full"
-            />
+            <Slider value={volume} onValueChange={setVolume} max={100} step={1} className="w-full" />
           </div>
 
-          {/* Chat notifications toggle */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-100">
@@ -132,23 +117,18 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             </div>
             <Switch checked={chatNotificationsEnabled} onCheckedChange={setChatNotificationsEnabled} />
           </div>
-
-          {/* Debug badge toggle */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
-                <Bug className="h-5 w-5 text-amber-700" />
-              </div>
-              <div>
-                <p className="font-medium text-gray-800">Debug значок</p>
-                <p className="text-sm text-gray-500">Статусы сети/Supabase/Storage</p>
-              </div>
-            </div>
-            <Switch checked={debugBadgeEnabled} onCheckedChange={setDebugBadgeEnabled} />
-          </div>
         </div>
 
-        <div className="mt-8">
+        <div className="mt-6 space-y-3">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleSignOut}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border-red-200 py-5 text-red-700 hover:bg-red-50"
+          >
+            <LogOut className="h-4 w-4" />
+            Выйти из профиля
+          </Button>
           <Button
             onClick={onClose}
             className="w-full rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 py-6 text-white hover:from-blue-600 hover:to-cyan-600"
@@ -161,10 +141,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   )
 }
 
-// Helper to get settings
 export function getSettings() {
   if (typeof window === "undefined") {
-    return { notificationsEnabled: true, chatNotificationsEnabled: true, volume: 70, debugBadgeEnabled: false }
+    return { notificationsEnabled: true, chatNotificationsEnabled: true, volume: 70 }
   }
   try {
     const savedSettings = localStorage.getItem("fridge-settings")
@@ -174,11 +153,10 @@ export function getSettings() {
         notificationsEnabled: settings.notificationsEnabled ?? true,
         chatNotificationsEnabled: settings.chatNotificationsEnabled ?? true,
         volume: settings.volume ?? 70,
-        debugBadgeEnabled: settings.debugBadgeEnabled ?? false,
       }
     }
   } catch {
     // ignore
   }
-  return { notificationsEnabled: true, chatNotificationsEnabled: true, volume: 70, debugBadgeEnabled: false }
+  return { notificationsEnabled: true, chatNotificationsEnabled: true, volume: 70 }
 }

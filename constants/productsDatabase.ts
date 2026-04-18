@@ -131,6 +131,18 @@ export const getProductFromDatabase = (productName: string): ProductDatabaseItem
 
 export const getProductIcon = (productName: string) => getProductFromDatabase(productName)?.icon || "📦"
 
+/** First whitespace-separated token that is an exact key in PRODUCTS_DATABASE (for icons / BJU from multi-word names). */
+export const getProductMatchByFirstDictionaryWord = (
+  productName: string
+): { key: string; item: ProductDatabaseItem } | null => {
+  const normalized = normalizeProductName(productName)
+  if (!normalized) return null
+  for (const word of normalized.split(/\s+/).filter(Boolean)) {
+    if (hasKey(word)) return { key: word, item: PRODUCTS_DATABASE[word] }
+  }
+  return null
+}
+
 export const getProductKeyMatch = (productName: string): { key: string; item: ProductDatabaseItem } | null => {
   const normalized = normalizeProductName(productName)
   if (!normalized) return null

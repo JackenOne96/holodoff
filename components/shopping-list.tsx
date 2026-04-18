@@ -15,6 +15,7 @@ interface ProductItemProps {
 }
 
 function ProductItem({ product, onMarkBought, onAddNutrition, isLocallyBought }: ProductItemProps) {
+  const showFoodDetails = canShowNutritionButton(product.name)
   const daysUntilExpiry = Math.ceil((new Date(product.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
   const isExpiringSoon = daysUntilExpiry <= 2
   const isExpired = daysUntilExpiry < 0
@@ -43,17 +44,19 @@ function ProductItem({ product, onMarkBought, onAddNutrition, isLocallyBought }:
         <p className={`truncate text-[10px] font-medium ${isLocallyBought ? "text-green-700" : "text-gray-800"}`}>
           {product.name} — {product.quantity} {product.unit}
         </p>
-        <div className="mt-0.5 flex items-center gap-1">
-          <Clock className={`h-2 w-2 ${isExpiringSoon || isExpired ? "text-red-500" : "text-gray-400"}`} />
-          <Badge
-            variant="secondary"
-            className={`px-1.5 py-0 text-[9px] ${isExpired ? "bg-gray-100 text-gray-600" : isExpiringSoon ? "bg-red-100 text-red-600" : "bg-green-100 text-green-600"}`}
-          >
-            {getExpiryText()}
-          </Badge>
-        </div>
+        {showFoodDetails && (
+          <div className="mt-0.5 flex items-center gap-1">
+            <Clock className={`h-2 w-2 ${isExpiringSoon || isExpired ? "text-red-500" : "text-gray-400"}`} />
+            <Badge
+              variant="secondary"
+              className={`px-1.5 py-0 text-[9px] ${isExpired ? "bg-gray-100 text-gray-600" : isExpiringSoon ? "bg-red-100 text-red-600" : "bg-green-100 text-green-600"}`}
+            >
+              {getExpiryText()}
+            </Badge>
+          </div>
+        )}
       </div>
-      {canShowNutritionButton(product.name) && (
+      {showFoodDetails && (
         <button onClick={() => onAddNutrition(product.name)} className="rounded-md bg-blue-500 px-1.5 py-0.5 text-[9px] font-semibold text-white hover:bg-blue-600">
           БЖУ
         </button>
@@ -106,7 +109,7 @@ export function ShoppingList({ onAddNutrition }: ShoppingListProps) {
             <p className="mt-1 text-[10px] text-gray-300">Добавьте продукты через поле выше</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-1">
+          <div className="flex flex-col gap-1">
             <AnimatePresence mode="popLayout">
               {products.map((product) => (
                 <ProductItem

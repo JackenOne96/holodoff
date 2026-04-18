@@ -179,7 +179,9 @@ interface FridgeState {
   history: PurchaseHistoryEntry[]
   addToShopping: (input: { name: string; emoji?: string; quantity?: number; unit?: string }) => Promise<void>
   removeFromShopping: (id: string) => Promise<void>
+  markAllShoppingPurchased: () => Promise<void>
   clearHistory: () => Promise<boolean>
+  signOutFromProfile: () => Promise<void>
 
   messages: ChatMessage[]
   addMessage: (text: string, sender: string, isSystem?: boolean) => Promise<void>
@@ -633,6 +635,68 @@ export const useFridgeStore = create<FridgeState>()(
         }
 
         await get().refreshFamilyData()
+      },
+
+      markAllShoppingPurchased: async () => {
+        const { shoppingList, isBypassMode, familyId } = get()
+        if (shoppingList.length === 0) return
+
+        if (isBypassMode) {
+          const purchasedAt = new Date().toISOString()
+          set((state) => {
+            const entries: PurchaseHistoryEntry[] = state.shoppingList.map((item) => ({
+              id: `dev-history-${Date.now()}-${item.id}-${Math.random().toString(36).slice(2, 8)}`,
+              name: item.name,
+              emoji: item.emoji,
+              purchasedAt,
+            }))
+            return {
+              shoppingList: [],
+              history: [...entries, ...state.history],
+            }
+          })
+          return
+        }
+
+        if (!familyId) return
+
+        const ids = shoppingList.map((p) => p.id)
+        const { error } = await supabase
+          .from("shopping_items")
+          .update({ purchased: true, purchased_at: new Date().toISOString() })
+          .in("id", ids)
+          .eq("family_id", familyId)
+          .eq("purchased", false)
+
+        if (error) {
+          set({ error: error.message })
+          return
+        }
+
+        await get().refreshFamilyData()
+      },
+
+      signOutFromProfile: async () => {
+        await stopRealtime()
+        try {
+          await supabase.auth.signOut()
+        } catch {
+          // session may be absent
+        }
+        set({
+          isLoading: false,
+          error: null,
+          isBypassMode: false,
+          userName: null,
+          currentMemberId: null,
+          hasJoined: false,
+          familyId: null,
+          familyCode: "",
+          familyMembers: [],
+          shoppingList: [],
+          history: [],
+          messages: [],
+        })
       },
 
       clearHistory: async () => {
