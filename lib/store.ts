@@ -518,15 +518,12 @@ export const useFridgeStore = create<FridgeState>()(
           return true
         }
 
-        const avatarLetter = getInitial(trimmedName)
-
         const { data, error } = await supabase
           .from("family_members")
           .insert({
             family_id: familyId,
             name: trimmedName,
             gender: profile.gender,
-            avatar_letter: avatarLetter,
             avatar_icon: profile.avatar,
           })
           .select("*")
