@@ -339,6 +339,8 @@ const scheduleRefresh = (refresh: () => Promise<void>) => {
   }, 150)
 }
 
+const getFamilySignalEvent = (familyId: string) => `signal:${familyId}`
+
 const startRealtime = async (familyId: string, refresh: () => Promise<void>) => {
   await stopRealtime()
 
@@ -371,10 +373,10 @@ const startRealtime = async (familyId: string, refresh: () => Promise<void>) => 
         broadcast: { self: false },
       },
     })
-    .on("broadcast", { event: "signal" }, (payload) => {
+    .on("broadcast", { event: getFamilySignalEvent(familyId) }, (payload) => {
       const data = payload.payload as Partial<IncomingFamilySignal> | undefined
-      const state = get()
-      if (!data || !data.familyId || data.familyId !== familyId) return
+      const state = useFridgeStore.getState()
+      if (!data || !data.familyId) return
       if (data.senderMemberId && state.currentMemberId && data.senderMemberId === state.currentMemberId) return
 
       set({
@@ -419,9 +421,12 @@ export const useFridgeStore = create<FridgeState>()(
         if (!supabase || !familyId || !currentMemberId) return
 
         try {
-          await supabase.channel("family_channel").send({
+          if (!broadcastChannel) {
+            await startRealtime(familyId, get().refreshFamilyData)
+          }
+          await broadcastChannel?.send({
             type: "broadcast",
-            event: "signal",
+            event: getFamilySignalEvent(familyId),
             payload: {
               id: `sig-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
               type,

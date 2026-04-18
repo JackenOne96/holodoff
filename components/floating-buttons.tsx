@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useFridgeStore } from "@/lib/store"
 import { getSettings } from "./settings-modal"
+import { showNotification } from "@/lib/notifications"
 
 export function FloatingButtons() {
   const [showDialog, setShowDialog] = useState(false)
@@ -77,13 +78,8 @@ export function FloatingButtons() {
 
   const pushNotify = async (title: string, body: string) => {
     const settings = getSettings()
-    if (!settings.notificationsEnabled || typeof window === "undefined" || !("Notification" in window)) return
-    if (Notification.permission === "default") {
-      await Notification.requestPermission()
-    }
-    if (Notification.permission === "granted") {
-      new Notification(title, { body })
-    }
+    if (!settings.notificationsEnabled) return
+    await showNotification(title, { body, tag: "family-signal" })
   }
 
   const initial = (userName || "Я").charAt(0).toUpperCase()

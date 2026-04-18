@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useFridgeStore } from "@/lib/store"
 import { getSettings } from "./settings-modal"
+import { showNotification } from "@/lib/notifications"
 
 // Sound frequencies for different users
 const userSounds: Record<string, number> = {
@@ -66,17 +67,9 @@ export function Chat() {
         if (settings.notificationsEnabled && settings.chatNotificationsEnabled) {
           playTone(userSounds[newMsg.sender] || 523)
           // Push notification (only if enabled)
-          if (typeof window !== "undefined" && "Notification" in window) {
-            const title = "ХолодOFF: новое сообщение"
-            const body = `${newMsg.sender}: ${newMsg.text}`
-            if (Notification.permission === "default") {
-              void Notification.requestPermission().then((perm) => {
-                if (perm === "granted") new Notification(title, { body })
-              })
-            } else if (Notification.permission === "granted") {
-              new Notification(title, { body })
-            }
-          }
+          const title = "ХолодOFF: новое сообщение"
+          const body = `${newMsg.sender}: ${newMsg.text}`
+          void showNotification(title, { body, tag: "chat-message" })
         }
       }
     }

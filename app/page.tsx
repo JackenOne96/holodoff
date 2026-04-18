@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button"
 import { Plus, ShoppingCart } from "lucide-react"
 import { parseProductInput } from "@/lib/parseProductInput"
 import { getSettings } from "@/components/settings-modal"
+import { registerServiceWorker, requestNotificationPermission, showNotification } from "@/lib/notifications"
 
 export default function HomePage() {
   const router = useRouter()
@@ -52,10 +53,20 @@ export default function HomePage() {
   }, [mounted, initialize])
 
   useEffect(() => {
+    if (!mounted) return
+    void registerServiceWorker()
+  }, [mounted])
+
+  useEffect(() => {
     if (mounted && hasJoined && !userName) {
       setShowNameModal(true)
     }
   }, [mounted, userName, hasJoined])
+
+  useEffect(() => {
+    if (!mounted || !hasJoined) return
+    void requestNotificationPermission()
+  }, [mounted, hasJoined])
 
   useEffect(() => {
     if (!incomingSignal) return
@@ -79,6 +90,15 @@ export default function HomePage() {
       } catch {
         // ignore
       }
+
+      const title =
+        incomingSignal.type === "alert"
+          ? "ХолодOFF: Внимание"
+          : incomingSignal.type === "ok"
+            ? "ХолодOFF: Всё купил"
+            : "ХолодOFF: В магазине"
+      const body = `${incomingSignal.senderName} отправил(а) сигнал`
+      void showNotification(title, { body, tag: `signal-${incomingSignal.familyId}` })
     }
 
     const t = window.setTimeout(() => clearIncomingSignal(), 3500)
