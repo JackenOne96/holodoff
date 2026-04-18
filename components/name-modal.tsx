@@ -18,13 +18,21 @@ export function NameModal({ onSubmit }: NameModalProps) {
   const [name, setName] = useState("")
   const [gender, setGender] = useState<"male" | "female" | null>(null)
   const [avatar, setAvatar] = useState<string | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const { isLoading } = useFridgeStore()
   const avatars = gender === "male" ? MALE_AVATARS : gender === "female" ? FEMALE_AVATARS : []
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (name.trim() && gender && avatar) {
-      await onSubmit({ name: name.trim(), gender, avatar })
+      try {
+        setErrorMessage(null)
+        await onSubmit({ name: name.trim(), gender, avatar })
+      } catch (err) {
+        console.error("NameModal submit failed", err)
+        const message = err instanceof Error ? err.message : "Не удалось сохранить профиль"
+        setErrorMessage(message)
+      }
     }
   }
 
@@ -114,6 +122,9 @@ export function NameModal({ onSubmit }: NameModalProps) {
             >
               {isLoading ? "Сохраняем..." : "Начать"}
             </Button>
+            {errorMessage && (
+              <p className="text-center text-sm font-medium text-red-600">{errorMessage}</p>
+            )}
           </form>
         </motion.div>
       </motion.div>

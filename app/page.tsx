@@ -56,10 +56,17 @@ export default function HomePage() {
   }, [mounted, userName, hasJoined])
 
   const handleNameSubmit = async (profile: { name: string; gender: "male" | "female"; avatar: string }) => {
-    const success = await setUserName(profile)
-    if (success) {
+    try {
+      const success = await setUserName(profile)
+      if (!success) {
+        const storeError = useFridgeStore.getState().error
+        throw new Error(storeError || "Не удалось сохранить профиль участника")
+      }
       setShowNameModal(false)
       router.replace("/")
+    } catch (err) {
+      console.error("Failed to save profile", err)
+      throw err
     }
   }
 
