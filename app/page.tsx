@@ -67,7 +67,11 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!mounted || !hasJoined) return
-    void requestNotificationPermission()
+    void requestNotificationPermission().then((permission) => {
+      if (permission !== "granted") {
+        console.warn("Notifications are not granted, push alerts will be disabled")
+      }
+    })
   }, [mounted, hasJoined])
 
   useEffect(() => {

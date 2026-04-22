@@ -36,6 +36,7 @@ const AVATAR_COLORS = [
 const SYSTEM_MESSAGE_PREFIX = "__system__::"
 let familyChannel: RealtimeChannel | null = null
 let broadcastChannel: RealtimeChannel | null = null
+let activeRealtimeFamilyId: string | null = null
 let refreshTimer: ReturnType<typeof setTimeout> | null = null
 const memoryStorage = new Map<string, string>()
 
@@ -339,6 +340,7 @@ const stopRealtime = async () => {
     }
     broadcastChannel = null
   }
+  activeRealtimeFamilyId = null
 }
 
 const scheduleRefresh = (refresh: () => Promise<void>) => {
@@ -365,6 +367,10 @@ const generateInviteCode = () =>
     .slice(0, 6)
 
 const startRealtime = async (familyId: string, refresh: () => Promise<void>) => {
+  if (activeRealtimeFamilyId === familyId && familyChannel && broadcastChannel) {
+    return
+  }
+
   await stopRealtime()
 
   const supabase = getSupabase()
@@ -415,6 +421,8 @@ const startRealtime = async (familyId: string, refresh: () => Promise<void>) => 
       })
     })
     .subscribe()
+
+  activeRealtimeFamilyId = familyId
 }
 
 export const useFridgeStore = create<FridgeState>()(

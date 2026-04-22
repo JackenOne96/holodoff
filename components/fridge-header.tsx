@@ -28,9 +28,9 @@ export function FridgeHeader() {
 
   return (
     <>
-      <header className="grid h-[8%] min-h-[56px] grid-cols-3 items-center px-4">
+      <header className="grid h-[9%] min-h-[64px] grid-cols-3 items-center px-4 pt-2">
         <div className="flex items-center gap-2" />
-        <div className="text-center">
+        <div className="pt-1 text-center">
           <span className="text-lg font-semibold text-gray-800">{familyName || "Холодильник"}</span>
         </div>
 

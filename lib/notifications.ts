@@ -32,6 +32,7 @@ export const requestNotificationPermission = async (): Promise<NotificationPermi
 
 export const showNotification = async (title: string, options?: NotificationOptions): Promise<void> => {
   if (typeof window === "undefined") return
+  if (!("Notification" in window) || Notification.permission !== "granted") return
 
   if (!("serviceWorker" in navigator) || !navigator.serviceWorker.controller) return
   const registration = await navigator.serviceWorker.ready
