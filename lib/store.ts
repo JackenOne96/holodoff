@@ -354,7 +354,7 @@ const scheduleRefresh = (refresh: () => Promise<void>) => {
   }, 150)
 }
 
-const getFamilySignalEvent = (familyId: string) => `signal:${familyId}`
+const SIGNAL_BROADCAST_EVENT = "signal"
 const FAMILY_MEMBER_LIMIT = 4
 const PROMO_CODE = "HolodAll2026"
 
@@ -445,7 +445,7 @@ const startRealtime = async (familyId: string, refresh: () => Promise<void>) => 
         broadcast: { self: false },
       },
     })
-    .on("broadcast", { event: getFamilySignalEvent(familyId) }, (payload) => {
+    .on("broadcast", { event: SIGNAL_BROADCAST_EVENT }, (payload) => {
       const data = payload.payload as Partial<IncomingFamilySignal> | undefined
       const state = useFridgeStore.getState()
       if (!data || !data.familyId) return
@@ -519,7 +519,7 @@ export const useFridgeStore = create<FridgeState>()(
           }
           await broadcastChannel?.send({
             type: "broadcast",
-            event: getFamilySignalEvent(familyId),
+            event: SIGNAL_BROADCAST_EVENT,
             payload: {
               id: `sig-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
               type,
