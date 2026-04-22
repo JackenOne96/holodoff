@@ -4,6 +4,7 @@ import { create } from "zustand"
 import { persist, createJSONStorage } from "zustand/middleware"
 import { getSupabase } from "@/lib/supabase"
 import { getProductFromDatabase, getProductIcon } from "@/constants/productsDatabase"
+import { requestNotificationPermission, showNotification } from "@/lib/notifications"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 
 export const DEFAULT_EXPIRY: Record<string, number> = {
@@ -366,6 +367,48 @@ const generateInviteCode = () =>
     .padEnd(6, "0")
     .slice(0, 6)
 
+const getNotificationSettings = () => {
+  if (typeof window === "undefined") {
+    return { notificationsEnabled: true, volume: 70 }
+  }
+  try {
+    const raw = window.localStorage.getItem("fridge-settings")
+    if (!raw) return { notificationsEnabled: true, volume: 70 }
+    const parsed = JSON.parse(raw) as { notificationsEnabled?: boolean; volume?: number }
+    return {
+      notificationsEnabled: parsed.notificationsEnabled ?? true,
+      volume: parsed.volume ?? 70,
+    }
+  } catch {
+    return { notificationsEnabled: true, volume: 70 }
+  }
+}
+
+const playSignalTone = (type: FamilySignalType) => {
+  if (typeof window === "undefined") return
+  const settings = getNotificationSettings()
+  if (!settings.notificationsEnabled) return
+
+  try {
+    const audioContext = new (window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+    const oscillator = audioContext.createOscillator()
+    const gainNode = audioContext.createGain()
+    oscillator.connect(gainNode)
+    gainNode.connect(audioContext.destination)
+
+    const volume = (settings.volume / 100) * 0.25
+    oscillator.type = type === "alert" ? "sawtooth" : "sine"
+    oscillator.frequency.value = type === "alert" ? 2200 : type === "ok" ? 1200 : type === "store" ? 1000 : 760
+    gainNode.gain.setValueAtTime(volume, audioContext.currentTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.22)
+    oscillator.start(audioContext.currentTime)
+    oscillator.stop(audioContext.currentTime + 0.22)
+  } catch {
+    // ignore sound errors
+  }
+}
+
 const startRealtime = async (familyId: string, refresh: () => Promise<void>) => {
   if (activeRealtimeFamilyId === familyId && familyChannel && broadcastChannel) {
     return
@@ -419,6 +462,22 @@ const startRealtime = async (familyId: string, refresh: () => Promise<void>) => 
           createdAt: data.createdAt || new Date().toISOString(),
         },
       })
+
+      const settings = getNotificationSettings()
+      if (!settings.notificationsEnabled) return
+
+      const signalType = (data.type as FamilySignalType) || "alert"
+      const title =
+        signalType === "alert"
+          ? "ХолодOFF: Внимание"
+          : signalType === "ok"
+            ? "ХолодOFF: Всё купил"
+            : signalType === "store"
+              ? "ХолодOFF: В магазине"
+              : "ХолодOFF: Ознакомился"
+      const body = `${data.senderName || "Кто-то"} отправил(а) сигнал`
+      playSignalTone(signalType)
+      void showNotification(title, { body, tag: `signal-${data.familyId}` })
     })
     .subscribe()
 
@@ -693,6 +752,7 @@ export const useFridgeStore = create<FridgeState>()(
         try {
           const freshData = await loadFamilyData(family.id)
           await startRealtime(family.id, get().refreshFamilyData)
+          void requestNotificationPermission()
           set({
             ...freshData,
             familyId: family.id,
@@ -768,6 +828,7 @@ export const useFridgeStore = create<FridgeState>()(
 
         const freshData = await loadFamilyData(createdFamily.id)
         await startRealtime(createdFamily.id, get().refreshFamilyData)
+        void requestNotificationPermission()
         set({
           ...freshData,
           familyId: createdFamily.id,

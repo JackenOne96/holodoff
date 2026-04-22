@@ -22,8 +22,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Plus, ShoppingCart } from "lucide-react"
 import { parseProductInput } from "@/lib/parseProductInput"
-import { getSettings } from "@/components/settings-modal"
-import { registerServiceWorker, requestNotificationPermission, showNotification } from "@/lib/notifications"
+import { registerServiceWorker, requestNotificationPermission } from "@/lib/notifications"
 import { AcknowledgeButton } from "@/components/acknowledge-button"
 
 export default function HomePage() {
@@ -76,45 +75,6 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!incomingSignal) return
-
-    const settings = getSettings()
-    if (settings.notificationsEnabled) {
-      try {
-        const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
-        const oscillator = audioContext.createOscillator()
-        const gainNode = audioContext.createGain()
-        oscillator.connect(gainNode)
-        gainNode.connect(audioContext.destination)
-
-        const volume = (settings.volume / 100) * 0.25
-        oscillator.type = "sine"
-        oscillator.frequency.value =
-          incomingSignal.type === "alert"
-            ? 2200
-            : incomingSignal.type === "ok"
-              ? 1200
-              : incomingSignal.type === "store"
-                ? 1000
-                : 760
-        gainNode.gain.setValueAtTime(volume, audioContext.currentTime)
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2)
-        oscillator.start(audioContext.currentTime)
-        oscillator.stop(audioContext.currentTime + 0.2)
-      } catch {
-        // ignore
-      }
-
-      const title =
-        incomingSignal.type === "alert"
-          ? "ХолодOFF: Внимание"
-          : incomingSignal.type === "ok"
-            ? "ХолодOFF: Всё купил"
-            : incomingSignal.type === "store"
-              ? "ХолодOFF: В магазине"
-              : "ХолодOFF: Ознакомился"
-      const body = `${incomingSignal.senderName} отправил(а) сигнал`
-      void showNotification(title, { body, tag: `signal-${incomingSignal.familyId}` })
-    }
 
     const t = window.setTimeout(() => clearIncomingSignal(), 3500)
     return () => window.clearTimeout(t)
