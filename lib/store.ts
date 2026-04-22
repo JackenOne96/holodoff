@@ -36,7 +36,6 @@ const AVATAR_COLORS = [
 
 const SYSTEM_MESSAGE_PREFIX = "__system__::"
 let familyChannel: RealtimeChannel | null = null
-let broadcastChannel: RealtimeChannel | null = null
 let activeRealtimeFamilyId: string | null = null
 let refreshTimer: ReturnType<typeof setTimeout> | null = null
 const memoryStorage = new Map<string, string>()
@@ -127,6 +126,14 @@ type DbChatMessage = {
   family_id: string
   sender_id: string | null
   text: string
+  created_at: string
+}
+
+type DbFamilySignal = {
+  id: string
+  family_id: string
+  sender_member_id: string
+  type: FamilySignalType
   created_at: string
 }
 
@@ -334,13 +341,6 @@ const stopRealtime = async () => {
     familyChannel = null
   }
 
-  if (broadcastChannel) {
-    const supabase = getSupabase()
-    if (supabase) {
-      await supabase.removeChannel(broadcastChannel)
-    }
-    broadcastChannel = null
-  }
   activeRealtimeFamilyId = null
 }
 
@@ -354,7 +354,6 @@ const scheduleRefresh = (refresh: () => Promise<void>) => {
   }, 150)
 }
 
-const SIGNAL_BROADCAST_EVENT = "signal"
 const FAMILY_MEMBER_LIMIT = 4
 const PROMO_CODE = "HolodAll2026"
 
@@ -410,7 +409,7 @@ const playSignalTone = (type: FamilySignalType) => {
 }
 
 const startRealtime = async (familyId: string, refresh: () => Promise<void>) => {
-  if (activeRealtimeFamilyId === familyId && familyChannel && broadcastChannel) {
+  if (activeRealtimeFamilyId === familyId && familyChannel) {
     return
   }
 
@@ -436,49 +435,47 @@ const startRealtime = async (familyId: string, refresh: () => Promise<void>) => 
       { event: "*", schema: "public", table: "chat_messages", filter: `family_id=eq.${familyId}` },
       () => scheduleRefresh(refresh)
     )
-    .subscribe()
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "family_signals", filter: `family_id=eq.${familyId}` },
+      (payload) => {
+        const data = payload.new as DbFamilySignal
+        const state = useFridgeStore.getState()
+        if (!data || !data.family_id) return
+        if (data.sender_member_id && state.currentMemberId && data.sender_member_id === state.currentMemberId) return
+        if (data.family_id !== state.familyId) return
 
-  // Broadcast channel for button "signals" (Внимание / Всё купил / В магазине)
-  broadcastChannel = supabase
-    .channel("family_channel", {
-      config: {
-        broadcast: { self: false },
-      },
-    })
-    .on("broadcast", { event: SIGNAL_BROADCAST_EVENT }, (payload) => {
-      const data = payload.payload as Partial<IncomingFamilySignal> | undefined
-      const state = useFridgeStore.getState()
-      if (!data || !data.familyId) return
-      if (data.senderMemberId && state.currentMemberId && data.senderMemberId === state.currentMemberId) return
-      if (data.familyId !== state.familyId) return
+        const senderMember = state.familyMembers.find((m) => m.id === data.sender_member_id)
+        const senderName = senderMember?.name || "Кто-то"
+        const signalType = data.type || "alert"
 
-      set({
-        incomingSignal: {
-          id: data.id || `sig-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          type: (data.type as FamilySignalType) || "alert",
-          familyId: data.familyId,
-          senderMemberId: data.senderMemberId || "unknown",
-          senderName: data.senderName || "Кто-то",
-          createdAt: data.createdAt || new Date().toISOString(),
-        },
-      })
+        useFridgeStore.setState({
+          incomingSignal: {
+            id: data.id || `sig-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            type: signalType,
+            familyId: data.family_id,
+            senderMemberId: data.sender_member_id || "unknown",
+            senderName,
+            createdAt: data.created_at || new Date().toISOString(),
+          },
+        })
 
-      const settings = getNotificationSettings()
-      if (!settings.notificationsEnabled) return
+        const settings = getNotificationSettings()
+        if (!settings.notificationsEnabled) return
 
-      const signalType = (data.type as FamilySignalType) || "alert"
-      const title =
-        signalType === "alert"
-          ? "ХолодOFF: Внимание"
-          : signalType === "ok"
-            ? "ХолодOFF: Всё купил"
-            : signalType === "store"
-              ? "ХолодOFF: В магазине"
-              : "ХолодOFF: Ознакомился"
-      const body = `${data.senderName || "Кто-то"} отправил(а) сигнал`
-      playSignalTone(signalType)
-      void showNotification(title, { body, tag: `signal-${data.familyId}` })
-    })
+        const title =
+          signalType === "alert"
+            ? "ХолодOFF: Внимание"
+            : signalType === "ok"
+              ? "ХолодOFF: Всё купил"
+              : signalType === "store"
+                ? "ХолодOFF: В магазине"
+                : "ХолодOFF: Ознакомился"
+        const body = `${senderName} отправил(а) сигнал`
+        playSignalTone(signalType)
+        void showNotification(title, { body, tag: `signal-${data.family_id}` })
+      }
+    )
     .subscribe()
 
   activeRealtimeFamilyId = familyId
@@ -509,28 +506,18 @@ export const useFridgeStore = create<FridgeState>()(
       clearIncomingSignal: () => set({ incomingSignal: null }),
       broadcastSignal: async (type: FamilySignalType) => {
         const supabase = getSupabase()
-        const { familyId, currentMemberId, userName, isBypassMode } = get()
+        const { familyId, currentMemberId, isBypassMode } = get()
         if (isBypassMode) return
         if (!supabase || !familyId || !currentMemberId) return
 
         try {
-          if (!broadcastChannel) {
-            await startRealtime(familyId, get().refreshFamilyData)
-          }
-          await broadcastChannel?.send({
-            type: "broadcast",
-            event: SIGNAL_BROADCAST_EVENT,
-            payload: {
-              id: `sig-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-              type,
-              familyId,
-              senderMemberId: currentMemberId,
-              senderName: userName || "Кто-то",
-              createdAt: new Date().toISOString(),
-            } satisfies IncomingFamilySignal,
+          await supabase.from("family_signals").insert({
+            family_id: familyId,
+            sender_member_id: currentMemberId,
+            type,
           })
         } catch (err) {
-          console.error("Failed to broadcast signal", err)
+          console.error("Failed to create family signal", err)
         }
       },
       bypassLogin: () => {
