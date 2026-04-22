@@ -3,7 +3,7 @@
 import { create } from "zustand"
 import { persist, createJSONStorage } from "zustand/middleware"
 import { getSupabase } from "@/lib/supabase"
-import { getProductIcon } from "@/constants/productsDatabase"
+import { getProductFromDatabase, getProductIcon } from "@/constants/productsDatabase"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 
 export const DEFAULT_EXPIRY: Record<string, number> = {
@@ -39,7 +39,7 @@ let broadcastChannel: RealtimeChannel | null = null
 let refreshTimer: ReturnType<typeof setTimeout> | null = null
 const memoryStorage = new Map<string, string>()
 
-type FamilySignalType = "alert" | "ok" | "store"
+type FamilySignalType = "alert" | "ok" | "store" | "ack"
 
 export type IncomingFamilySignal = {
   id: string
@@ -132,7 +132,7 @@ export interface Product {
   quantity: number
   unit: string
   addedDate: string
-  expiryDate: string
+  expiryDate: string | null
   addedBy: string
   purchased: boolean
 }
@@ -204,7 +204,12 @@ interface FridgeState {
   broadcastSignal: (type: FamilySignalType) => Promise<void>
 }
 
-const calculateExpiryDate = (productName: string): string => {
+const calculateExpiryDate = (productName: string): string | null => {
+  const dictionaryEntry = getProductFromDatabase(productName)
+  if (dictionaryEntry && !dictionaryEntry.isFood) {
+    return null
+  }
+
   const lowerName = productName.toLowerCase()
   let days = 7
 
@@ -243,7 +248,7 @@ const mapShoppingItems = (items: DbShoppingItem[], membersById: Map<string, DbFa
     quantity: item.quantity ?? 1,
     unit: item.unit ?? "шт",
     addedDate: item.created_at,
-    expiryDate: item.expiry_date || item.created_at,
+    expiryDate: item.expiry_date || null,
     addedBy: getInitial(membersById.get(item.added_by || "")?.avatar_letter || membersById.get(item.added_by || "")?.name),
     purchased: item.purchased,
   }))
@@ -340,6 +345,7 @@ const scheduleRefresh = (refresh: () => Promise<void>) => {
 }
 
 const getFamilySignalEvent = (familyId: string) => `signal:${familyId}`
+const FAMILY_MEMBER_LIMIT = 4
 
 const startRealtime = async (familyId: string, refresh: () => Promise<void>) => {
   await stopRealtime()
@@ -378,6 +384,7 @@ const startRealtime = async (familyId: string, refresh: () => Promise<void>) => 
       const state = useFridgeStore.getState()
       if (!data || !data.familyId) return
       if (data.senderMemberId && state.currentMemberId && data.senderMemberId === state.currentMemberId) return
+      if (data.familyId !== state.familyId) return
 
       set({
         incomingSignal: {
@@ -541,6 +548,23 @@ export const useFridgeStore = create<FridgeState>()(
         }
 
         const family = data as DbFamily
+        const { count: membersCount, error: membersCountError } = await supabase
+          .from("family_members")
+          .select("*", { count: "exact", head: true })
+          .eq("family_id", family.id)
+
+        if (membersCountError) {
+          set({ isLoading: false, error: membersCountError.message })
+          return false
+        }
+
+        if ((membersCount ?? 0) >= FAMILY_MEMBER_LIMIT) {
+          set({
+            isLoading: false,
+            error: `Достигнут лимит участников (${FAMILY_MEMBER_LIMIT} человека)`,
+          })
+          return false
+        }
 
         try {
           const freshData = await loadFamilyData(family.id)
@@ -589,6 +613,27 @@ export const useFridgeStore = create<FridgeState>()(
         if (!supabase) return false
 
         set({ isLoading: true, error: null })
+
+        const { count: membersCount, error: membersCountError } = await supabase
+          .from("family_members")
+          .select("*", { count: "exact", head: true })
+          .eq("family_id", familyId)
+
+        if (membersCountError) {
+          set({
+            isLoading: false,
+            error: membersCountError.message,
+          })
+          return false
+        }
+
+        if ((membersCount ?? 0) >= FAMILY_MEMBER_LIMIT) {
+          set({
+            isLoading: false,
+            error: `Достигнут лимит участников (${FAMILY_MEMBER_LIMIT} человека)`,
+          })
+          return false
+        }
 
         const existingMember = familyMembers.find((member) => member.name.toLowerCase() === trimmedName.toLowerCase())
 

@@ -60,9 +60,8 @@ export function Chat() {
     // Play sound for new messages from other users
     if (messages.length > prevMessageCount.current) {
       const newMsg = messages[messages.length - 1]
-      const userInitial = (userName || "Я").charAt(0).toUpperCase()
-      // Only play sound if message is from someone else
-      if (newMsg && newMsg.sender !== userInitial && !newMsg.isSystem) {
+      // Only play sound/notification if message is from someone else
+      if (newMsg && !newMsg.isSystem && newMsg.senderId !== currentMemberId) {
         const settings = getSettings()
         if (settings.notificationsEnabled && settings.chatNotificationsEnabled) {
           playTone(userSounds[newMsg.sender] || 523)
@@ -74,7 +73,7 @@ export function Chat() {
       }
     }
     prevMessageCount.current = messages.length
-  }, [messages, userName])
+  }, [messages, currentMemberId])
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault()

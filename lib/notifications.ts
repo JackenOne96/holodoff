@@ -33,11 +33,7 @@ export const requestNotificationPermission = async (): Promise<NotificationPermi
 export const showNotification = async (title: string, options?: NotificationOptions): Promise<void> => {
   if (typeof window === "undefined") return
 
-  if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
-    const registration = await navigator.serviceWorker.ready
-    await registration.showNotification(title, options)
-  } else if ("Notification" in window && Notification.permission === "granted") {
-    // Browser fallback when service worker is unavailable.
-    new Notification(title, options)
-  }
+  if (!("serviceWorker" in navigator) || !navigator.serviceWorker.controller) return
+  const registration = await navigator.serviceWorker.ready
+  await registration.showNotification(title, options)
 }

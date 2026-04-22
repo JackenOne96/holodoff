@@ -10,7 +10,7 @@ import { useFridgeStore } from "@/lib/store"
 export function JoinScreen() {
   const [code, setCode] = useState("")
   const [error, setError] = useState("")
-  const { joinFamily, bypassLogin, isLoading } = useFridgeStore()
+  const { joinFamily, bypassLogin, isLoading, error: storeError } = useFridgeStore()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -28,7 +28,7 @@ export function JoinScreen() {
 
     const success = await joinFamily(code)
     if (!success) {
-      setError("Неверный код. Попробуйте снова.")
+      setError(storeError || "Неверный код. Попробуйте снова.")
     }
   }
 

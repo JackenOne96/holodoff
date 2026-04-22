@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useFridgeStore } from "@/lib/store"
 import { getSettings } from "./settings-modal"
-import { showNotification } from "@/lib/notifications"
 
 export function FloatingButtons() {
   const [showDialog, setShowDialog] = useState(false)
@@ -76,12 +75,6 @@ export function FloatingButtons() {
     }
   }
 
-  const pushNotify = async (title: string, body: string) => {
-    const settings = getSettings()
-    if (!settings.notificationsEnabled) return
-    await showNotification(title, { body, tag: "family-signal" })
-  }
-
   const initial = (userName || "Я").charAt(0).toUpperCase()
 
   const handleAlert = async () => {
@@ -89,7 +82,6 @@ export function FloatingButtons() {
     vibrate([200, 100, 200])
     playSound("alert")
     await broadcastSignal("alert")
-    await pushNotify("ХолодOFF: Внимание", "Кто-то отправил срочное уведомление семье")
     await addMessage(`${initial} просит срочно заглянуть в список!`, "Система", true)
 
     setTimeout(() => {
@@ -104,7 +96,6 @@ export function FloatingButtons() {
     playSound("ok")
     await markAllShoppingPurchased()
     await broadcastSignal("ok")
-    await pushNotify("ХолодOFF: Всё купил", "Покупки подтверждены")
     await addMessage(`${initial} подтвердил(а) покупку`, "Система", true)
     setDialogMessage("Подтверждение отправлено!")
     setShowDialog(true)
@@ -118,7 +109,6 @@ export function FloatingButtons() {
       vibrate([100, 50, 100])
       playSound("store")
       await broadcastSignal("store")
-      await pushNotify("ХолодOFF: В магазине", "Пользователь сейчас в магазине")
       await addMessage(`${initial} сейчас в магазине! Пишите, что нужно купить.`, "Система", true)
       setDialogMessage("Все члены семьи уведомлены!")
       setShowDialog(true)

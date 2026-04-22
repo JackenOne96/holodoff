@@ -23,6 +23,7 @@ import { Plus, ShoppingCart } from "lucide-react"
 import { parseProductInput } from "@/lib/parseProductInput"
 import { getSettings } from "@/components/settings-modal"
 import { registerServiceWorker, requestNotificationPermission, showNotification } from "@/lib/notifications"
+import { AcknowledgeButton } from "@/components/acknowledge-button"
 
 export default function HomePage() {
   const router = useRouter()
@@ -82,7 +83,14 @@ export default function HomePage() {
 
         const volume = (settings.volume / 100) * 0.25
         oscillator.type = "sine"
-        oscillator.frequency.value = incomingSignal.type === "alert" ? 2200 : incomingSignal.type === "ok" ? 1200 : 1000
+        oscillator.frequency.value =
+          incomingSignal.type === "alert"
+            ? 2200
+            : incomingSignal.type === "ok"
+              ? 1200
+              : incomingSignal.type === "store"
+                ? 1000
+                : 760
         gainNode.gain.setValueAtTime(volume, audioContext.currentTime)
         gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2)
         oscillator.start(audioContext.currentTime)
@@ -96,7 +104,9 @@ export default function HomePage() {
           ? "ХолодOFF: Внимание"
           : incomingSignal.type === "ok"
             ? "ХолодOFF: Всё купил"
-            : "ХолодOFF: В магазине"
+            : incomingSignal.type === "store"
+              ? "ХолодOFF: В магазине"
+              : "ХолодOFF: Ознакомился"
       const body = `${incomingSignal.senderName} отправил(а) сигнал`
       void showNotification(title, { body, tag: `signal-${incomingSignal.familyId}` })
     }
@@ -185,12 +195,15 @@ export default function HomePage() {
                 ? "bg-red-500 text-white"
                 : incomingSignal.type === "ok"
                   ? "bg-emerald-500 text-white"
+                  : incomingSignal.type === "ack"
+                    ? "bg-gray-600 text-white"
                   : "bg-yellow-400 text-gray-900"
             }`}
           >
             {incomingSignal.type === "alert" && "❗️ Внимание"}
             {incomingSignal.type === "ok" && "✅ Всё купил"}
             {incomingSignal.type === "store" && "🛒 В магазине"}
+            {incomingSignal.type === "ack" && "✅ Ознакомился"}
             <span className="ml-2 text-xs font-medium opacity-90">от {incomingSignal.senderName}</span>
           </div>
         </motion.div>
@@ -245,6 +258,9 @@ export default function HomePage() {
       </div>
 
       <div className="relative z-20 shrink-0 px-3 pb-2 pt-1">
+        <div className="mb-2 flex justify-end">
+          <AcknowledgeButton />
+        </div>
         <form onSubmit={handleAddProduct} className="flex gap-2">
           <div className="relative flex-1">
             <ShoppingCart className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />

@@ -16,7 +16,9 @@ interface ProductItemProps {
 
 function ProductItem({ product, onMarkBought, onAddNutrition, isLocallyBought }: ProductItemProps) {
   const showFoodDetails = canShowNutritionButton(product.name)
-  const daysUntilExpiry = Math.ceil((new Date(product.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+  const daysUntilExpiry = showFoodDetails && product.expiryDate
+    ? Math.ceil((new Date(product.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    : 0
   const isExpiringSoon = daysUntilExpiry <= 2
   const isExpired = daysUntilExpiry < 0
 

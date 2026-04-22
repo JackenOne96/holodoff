@@ -1,4 +1,4 @@
-import { getProductMatchByFirstDictionaryWord, normalizeProductName } from "@/constants/productsDatabase"
+import { getProductKeyMatch, normalizeProductName } from "@/constants/productsDatabase"
 
 export type Unit = string
 
@@ -79,7 +79,7 @@ export function parseProductInput(input: string): ParsedProduct | null {
 
   if (!normalizeProductName(nameFromUser)) return null
 
-  const match = getProductMatchByFirstDictionaryWord(nameFromUser)
+  const match = getProductKeyMatch(nameFromUser)
   const emoji = match ? match.item.icon : "📦"
   const displayName = nameFromUser
   const canonicalName = match?.key ?? normalizeProductName(nameFromUser)
