@@ -10,8 +10,10 @@ begin
     create policy family_members_insert_limit_4
       on public.family_members
       for insert
-      to anon, authenticated
+      to authenticated
       with check (
+        auth_user_id = auth.uid()
+        and
         (
           select count(*)
           from public.family_members fm

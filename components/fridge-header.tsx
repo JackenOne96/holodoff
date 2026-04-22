@@ -16,7 +16,7 @@ import { useFridgeStore } from "@/lib/store"
 import { SettingsModal } from "./settings-modal"
 
 export function FridgeHeader() {
-  const { familyCode, familyMembers, userName } = useFridgeStore()
+  const { familyCode, familyMembers, userName, familyName } = useFridgeStore()
   const [copied, setCopied] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
 
@@ -28,12 +28,13 @@ export function FridgeHeader() {
 
   return (
     <>
-      <header className="flex h-[8%] min-h-[56px] items-center justify-between px-4">
-        <div className="flex items-center gap-2">
-          <span className="text-lg font-semibold text-gray-800">Холодильник</span>
+      <header className="grid h-[8%] min-h-[56px] grid-cols-3 items-center px-4">
+        <div className="flex items-center gap-2" />
+        <div className="text-center">
+          <span className="text-lg font-semibold text-gray-800">{familyName || "Холодильник"}</span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-end gap-2">
           {/* Family members avatars */}
           <div className="flex -space-x-2">
             {familyMembers.map((member, index) => (
@@ -99,7 +100,7 @@ export function FridgeHeader() {
                   </Button>
                 </div>
                 <p className="text-xs text-gray-500">
-                  Максимум участников: 5
+                  Максимум участников: 4
                 </p>
               </div>
             </DialogContent>

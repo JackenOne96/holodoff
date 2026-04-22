@@ -13,6 +13,7 @@ import { FloatingButtons } from "@/components/floating-buttons"
 import { NameModal } from "@/components/name-modal"
 import { HistoryModal } from "@/components/history-modal"
 import { JoinScreen } from "@/components/join-screen"
+import { PaymentScreen } from "@/components/payment-screen"
 import { NutritionCounter } from "@/components/nutrition-counter"
 import { AppErrorBoundary } from "@/components/app-error-boundary"
 import { useFridgeStore } from "@/lib/store"
@@ -27,7 +28,7 @@ import { AcknowledgeButton } from "@/components/acknowledge-button"
 
 export default function HomePage() {
   const router = useRouter()
-  const { userName, setUserName, addToShopping, hasJoined, initialize, isHydrated, isLoading, error, bypassLogin, incomingSignal, clearIncomingSignal } =
+  const { userName, setUserName, addToShopping, hasJoined, requiresPayment, initialize, isHydrated, isLoading, error, bypassLogin, incomingSignal, clearIncomingSignal } =
     useFridgeStore()
   const [mounted, setMounted] = useState(false)
   const [showNameModal, setShowNameModal] = useState(false)
@@ -173,6 +174,10 @@ export default function HomePage() {
   // Show join screen if user hasn't joined a family yet
   if (!hasJoined) {
     return <JoinScreen />
+  }
+
+  if (requiresPayment) {
+    return <PaymentScreen />
   }
 
   return (

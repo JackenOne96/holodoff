@@ -90,12 +90,15 @@ export const getStorageKind = () => storageKind
 type DbFamily = {
   id: string
   invite_code: string
+  name: string | null
+  trial_ends_at: string | null
   created_at: string
 }
 
 type DbFamilyMember = {
   id: string
   family_id: string
+  auth_user_id: string | null
   name: string
   gender: string | null
   avatar_letter: string | null
@@ -181,8 +184,12 @@ interface FridgeState {
 
   hasJoined: boolean
   familyId: string | null
+  familyName: string
   familyCode: string
+  requiresPayment: boolean
   joinFamily: (code: string) => Promise<boolean>
+  createFamily: (name: string) => Promise<boolean>
+  applyPromoCode: (code: string) => Promise<{ ok: boolean; message: string }>
   bypassLogin: () => void
   initialize: () => Promise<void>
   refreshFamilyData: () => Promise<void>
@@ -346,6 +353,16 @@ const scheduleRefresh = (refresh: () => Promise<void>) => {
 
 const getFamilySignalEvent = (familyId: string) => `signal:${familyId}`
 const FAMILY_MEMBER_LIMIT = 4
+const PROMO_CODE = "HolodAll2026"
+
+const generateInviteCode = () =>
+  Math.random()
+    .toString(36)
+    .replace(/[^a-z0-9]/gi, "")
+    .slice(0, 6)
+    .toUpperCase()
+    .padEnd(6, "0")
+    .slice(0, 6)
 
 const startRealtime = async (familyId: string, refresh: () => Promise<void>) => {
   await stopRealtime()
@@ -411,7 +428,9 @@ export const useFridgeStore = create<FridgeState>()(
       userName: null,
       currentMemberId: null,
       familyId: null,
+      familyName: "",
       familyCode: "",
+      requiresPayment: false,
       hasJoined: false,
 
       familyMembers: [],
@@ -454,7 +473,9 @@ export const useFridgeStore = create<FridgeState>()(
           userName: "Тест",
           currentMemberId: "dev-member",
           familyId: null,
+          familyName: "Dev family",
           familyCode: "DEV123",
+          requiresPayment: false,
           familyMembers: [
             {
               id: "dev-member",
@@ -482,17 +503,76 @@ export const useFridgeStore = create<FridgeState>()(
           return
         }
 
-        if (!familyId || !hasJoined) {
+        const supabase = getSupabase()
+        if (!supabase) {
           await stopRealtime()
           set({ isHydrated: true })
           return
         }
 
+        if (!familyId || !hasJoined) {
+          try {
+            const { data: sessionData } = await supabase.auth.getSession()
+            const user = sessionData.session?.user
+            if (!user) {
+              await stopRealtime()
+              set({ isHydrated: true })
+              return
+            }
+
+            const { data: memberData } = await supabase
+              .from("family_members")
+              .select("id, family_id")
+              .eq("auth_user_id", user.id)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle()
+
+            if (!memberData) {
+              await stopRealtime()
+              set({ isHydrated: true })
+              return
+            }
+
+            const freshData = await loadFamilyData(memberData.family_id)
+            const { data: familyData } = await supabase.from("families").select("*").eq("id", memberData.family_id).single()
+            const family = familyData as DbFamily | null
+            const currentMember = freshData.familyMembers.find((m) => m.id === memberData.id)
+
+            await startRealtime(memberData.family_id, get().refreshFamilyData)
+            set({
+              ...freshData,
+              familyId: memberData.family_id,
+              familyCode: family?.invite_code || "",
+              familyName: family?.name || "Семейная группа",
+              currentMemberId: memberData.id,
+              userName: currentMember?.name || user.email?.split("@")[0] || "Пользователь",
+              hasJoined: true,
+              requiresPayment: false,
+              isHydrated: true,
+              isLoading: false,
+              error: null,
+            })
+            return
+          } catch {
+            await stopRealtime()
+            set({ isHydrated: true })
+            return
+          }
+        }
+
         set({ isLoading: true, error: null })
         try {
           const freshData = await loadFamilyData(familyId)
+          const { data: familyData } = await supabase.from("families").select("name,invite_code").eq("id", familyId).single()
           await startRealtime(familyId, get().refreshFamilyData)
-          set({ ...freshData, isLoading: false, isHydrated: true })
+          set({
+            ...freshData,
+            familyName: familyData?.name || get().familyName || "Семейная группа",
+            familyCode: familyData?.invite_code || get().familyCode,
+            isLoading: false,
+            isHydrated: true,
+          })
         } catch (error) {
           set({
             isLoading: false,
@@ -548,6 +628,12 @@ export const useFridgeStore = create<FridgeState>()(
         }
 
         const family = data as DbFamily
+        const { data: sessionData } = await supabase.auth.getSession()
+        const user = sessionData.session?.user
+        if (!user) {
+          set({ isLoading: false, error: "Сначала войдите в аккаунт" })
+          return false
+        }
         const { count: membersCount, error: membersCountError } = await supabase
           .from("family_members")
           .select("*", { count: "exact", head: true })
@@ -566,14 +652,48 @@ export const useFridgeStore = create<FridgeState>()(
           return false
         }
 
+        const { data: existingMemberByAuth } = await supabase
+          .from("family_members")
+          .select("id")
+          .eq("family_id", family.id)
+          .eq("auth_user_id", user.id)
+          .maybeSingle()
+
+        let memberId = existingMemberByAuth?.id || null
+        let memberName = formatDisplayName(user.user_metadata?.name || user.email?.split("@")[0] || "Участник")
+        if (!memberId) {
+          const { data: insertedMember, error: insertMemberError } = await supabase
+            .from("family_members")
+            .insert({
+              family_id: family.id,
+              auth_user_id: user.id,
+              name: memberName,
+              avatar_icon: "🙂",
+              gender: null,
+            })
+            .select("id,name")
+            .single()
+
+          if (insertMemberError || !insertedMember) {
+            set({ isLoading: false, error: insertMemberError?.message || "Не удалось добавить участника" })
+            return false
+          }
+          memberId = insertedMember.id
+          memberName = insertedMember.name
+        }
+
         try {
           const freshData = await loadFamilyData(family.id)
           await startRealtime(family.id, get().refreshFamilyData)
           set({
             ...freshData,
             familyId: family.id,
+            familyName: family.name || "Семейная группа",
             familyCode: family.invite_code,
             hasJoined: true,
+            currentMemberId: memberId,
+            userName: memberName,
+            requiresPayment: false,
             isLoading: false,
             error: null,
           })
@@ -585,6 +705,87 @@ export const useFridgeStore = create<FridgeState>()(
           })
           return false
         }
+      },
+
+      createFamily: async (name: string) => {
+        const supabase = getSupabase()
+        if (!supabase) return false
+        const familyName = name.trim()
+        if (!familyName) {
+          set({ error: "Введите название группы" })
+          return false
+        }
+
+        set({ isLoading: true, error: null })
+        const { data: sessionData } = await supabase.auth.getSession()
+        const user = sessionData.session?.user
+        if (!user) {
+          set({ isLoading: false, error: "Сначала войдите в аккаунт" })
+          return false
+        }
+
+        const inviteCode = generateInviteCode()
+        const { data: createdFamily, error: familyError } = await supabase
+          .from("families")
+          .insert({
+            invite_code: inviteCode,
+            name: familyName,
+            created_by: user.id,
+          })
+          .select("*")
+          .single()
+
+        if (familyError || !createdFamily) {
+          set({ isLoading: false, error: familyError?.message || "Не удалось создать группу" })
+          return false
+        }
+
+        const defaultName = formatDisplayName(user.user_metadata?.name || user.email?.split("@")[0] || "Создатель")
+        const { data: createdMember, error: memberError } = await supabase
+          .from("family_members")
+          .insert({
+            family_id: createdFamily.id,
+            auth_user_id: user.id,
+            name: defaultName,
+            avatar_icon: "🙂",
+            gender: null,
+          })
+          .select("*")
+          .single()
+
+        if (memberError || !createdMember) {
+          set({ isLoading: false, error: memberError?.message || "Не удалось добавить участника в группу" })
+          return false
+        }
+
+        const freshData = await loadFamilyData(createdFamily.id)
+        await startRealtime(createdFamily.id, get().refreshFamilyData)
+        set({
+          ...freshData,
+          familyId: createdFamily.id,
+          familyName: createdFamily.name || familyName,
+          familyCode: createdFamily.invite_code,
+          hasJoined: true,
+          currentMemberId: createdMember.id,
+          userName: createdMember.name,
+          requiresPayment: true,
+          isLoading: false,
+          error: null,
+        })
+        return true
+      },
+
+      applyPromoCode: async (code: string) => {
+        const supabase = getSupabase()
+        const { familyId } = get()
+        if (!supabase || !familyId) return { ok: false, message: "Семья не найдена" }
+        if (code.trim() !== PROMO_CODE) return { ok: false, message: "Неверный промокод" }
+
+        const trialEndsAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
+        const { error } = await supabase.from("families").update({ trial_ends_at: trialEndsAt }).eq("id", familyId)
+        if (error) return { ok: false, message: error.message }
+        set({ requiresPayment: false })
+        return { ok: true, message: "Пробный период активирован на 3 дня" }
       },
 
       setUserName: async (profile: UserProfileSetup) => {
@@ -611,6 +812,12 @@ export const useFridgeStore = create<FridgeState>()(
 
         if (!familyId) return false
         if (!supabase) return false
+        const { data: sessionData } = await supabase.auth.getSession()
+        const user = sessionData.session?.user
+        if (!user) {
+          set({ isLoading: false, error: "Сначала войдите в аккаунт" })
+          return false
+        }
 
         set({ isLoading: true, error: null })
 
@@ -650,6 +857,7 @@ export const useFridgeStore = create<FridgeState>()(
           .from("family_members")
           .insert({
             family_id: familyId,
+            auth_user_id: user.id,
             name: trimmedName,
             gender: profile.gender,
             avatar_icon: profile.avatar,
@@ -845,7 +1053,9 @@ export const useFridgeStore = create<FridgeState>()(
           currentMemberId: null,
           hasJoined: false,
           familyId: null,
+          familyName: "",
           familyCode: "",
+          requiresPayment: false,
           familyMembers: [],
           shoppingList: [],
           history: [],
@@ -928,7 +1138,9 @@ export const useFridgeStore = create<FridgeState>()(
         userName: state.userName,
         currentMemberId: state.currentMemberId,
         familyId: state.familyId,
+        familyName: state.familyName,
         familyCode: state.familyCode,
+        requiresPayment: state.requiresPayment,
         hasJoined: state.hasJoined,
       }),
     }

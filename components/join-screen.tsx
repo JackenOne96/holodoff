@@ -2,33 +2,101 @@
 
 import { useState } from "react"
 import { motion } from "framer-motion"
-import { Users, RefrigeratorIcon } from "lucide-react"
+import { Users, RefrigeratorIcon, PlusCircle, KeyRound } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { useFridgeStore } from "@/lib/store"
+import { getSupabase } from "@/lib/supabase"
 
 export function JoinScreen() {
+  const [screen, setScreen] = useState<"choice" | "auth-create" | "auth-join" | "login" | "create" | "join">("choice")
   const [code, setCode] = useState("")
+  const [groupName, setGroupName] = useState("")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
   const [error, setError] = useState("")
-  const { joinFamily, bypassLogin, isLoading, error: storeError } = useFridgeStore()
+  const { joinFamily, createFamily, bypassLogin, isLoading, error: storeError } = useFridgeStore()
+
+  const showSoon = () => window.alert("Скоро появится")
+
+  const signUpWithEmail = async () => {
+    const supabase = getSupabase()
+    if (!supabase) {
+      setError("Supabase env не настроен")
+      return false
+    }
+
+    const { error: signUpError } = await supabase.auth.signUp({
+      email: email.trim(),
+      password: password.trim(),
+    })
+    if (signUpError) {
+      setError(signUpError.message)
+      return false
+    }
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password: password.trim(),
+    })
+    if (signInError) {
+      setError(signInError.message)
+      return false
+    }
+    return true
+  }
+
+  const signInWithEmail = async () => {
+    const supabase = getSupabase()
+    if (!supabase) {
+      setError("Supabase env не настроен")
+      return false
+    }
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password: password.trim(),
+    })
+    if (signInError) {
+      setError(signInError.message)
+      return false
+    }
+    return true
+  }
+
+  const handleAuthThenContinue = async (target: "create" | "join" | "login") => {
+    setError("")
+    if (!email.trim() || !password.trim()) {
+      setError("Введите Email и пароль")
+      return
+    }
+    const ok = target === "login" ? await signInWithEmail() : await signUpWithEmail()
+    if (!ok) return
+    setScreen(target === "login" ? "join" : target)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
-    
-    if (code.length !== 6) {
-      setError("Код должен состоять из 6 символов")
+
+    if (screen === "create") {
+      const success = await createFamily(groupName)
+      if (!success) setError(storeError || "Не удалось создать группу")
       return
     }
 
-    if (code === "123456") {
-      bypassLogin()
-      return
-    }
-
-    const success = await joinFamily(code)
-    if (!success) {
-      setError(storeError || "Неверный код. Попробуйте снова.")
+    if (screen === "join") {
+      if (code.length !== 6) {
+        setError("Код должен состоять из 6 символов")
+        return
+      }
+      if (code === "123456") {
+        bypassLogin()
+        return
+      }
+      const success = await joinFamily(code)
+      if (!success) {
+        setError(storeError || "Неверный код. Попробуйте снова.")
+      }
     }
   }
 
@@ -51,50 +119,128 @@ export function JoinScreen() {
         </motion.div>
 
         {/* Title */}
-        <h1 className="mb-2 text-center text-2xl font-bold text-gray-800">
-          Введите код приглашения
-        </h1>
-        
-        <p className="mb-8 text-center text-sm text-gray-500">
-          Присоединитесь к семейному холодильнику
-        </p>
+        <h1 className="mb-2 text-center text-2xl font-bold text-gray-800">Семейный холодильник</h1>
+        <p className="mb-6 text-center text-sm text-gray-500">Выберите способ продолжения</p>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="w-full space-y-4">
-          <div className="relative">
-            <Users className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-            <Input
-              type="text"
-              placeholder="______"
-              value={code}
-              onChange={(e) => {
-                const value = e.target.value.toUpperCase().slice(0, 6)
-                setCode(value)
-                setError("")
-              }}
-              maxLength={6}
-              className="h-14 rounded-2xl border-2 border-gray-200 bg-white pl-12 text-center font-mono text-2xl tracking-[0.5em] placeholder:tracking-[0.5em] focus:border-blue-400 focus:ring-blue-400"
-            />
-          </div>
-
-          {error && (
-            <motion.p
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-center text-sm text-red-500"
+        {screen === "choice" && (
+          <div className="w-full space-y-3">
+            <Button
+              type="button"
+              onClick={() => setScreen("auth-create")}
+              className="h-16 w-full rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-500 text-base font-semibold"
             >
-              {error}
-            </motion.p>
-          )}
+              <PlusCircle className="mr-2 h-5 w-5" />
+              Создать семейную группу
+            </Button>
+            <Button
+              type="button"
+              onClick={() => setScreen("auth-join")}
+              variant="outline"
+              className="h-16 w-full rounded-2xl border-2 text-base font-semibold"
+            >
+              <Users className="mr-2 h-5 w-5" />
+              Присоединиться к группе
+            </Button>
+            <button type="button" onClick={() => setScreen("login")} className="w-full text-sm text-blue-600 hover:underline">
+              Уже есть аккаунт? Войти
+            </button>
+          </div>
+        )}
 
-          <Button
-            type="submit"
-            disabled={code.length !== 6 || isLoading}
-            className="h-14 w-full rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-500 text-lg font-semibold text-white shadow-lg transition-all hover:from-blue-600 hover:to-cyan-600 hover:shadow-xl disabled:opacity-50"
+        {(screen === "auth-create" || screen === "auth-join" || screen === "login") && (
+          <div className="w-full space-y-4">
+            <Input
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="h-12 rounded-xl"
+            />
+            <Input
+              type="password"
+              placeholder="Пароль"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="h-12 rounded-xl"
+            />
+            <Button
+              type="button"
+              className="h-12 w-full rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500"
+              onClick={() =>
+                void handleAuthThenContinue(screen === "auth-create" ? "create" : screen === "auth-join" ? "join" : "login")
+              }
+            >
+              <KeyRound className="mr-2 h-4 w-4" />
+              {screen === "login" ? "Войти" : "Зарегистрироваться"}
+            </Button>
+            <div className="grid grid-cols-1 gap-2">
+              <Button type="button" variant="outline" onClick={showSoon}>
+                Войти через VK ID
+              </Button>
+              <Button type="button" variant="outline" onClick={showSoon}>
+                Войти через Яндекс ID
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {(screen === "create" || screen === "join") && (
+          <form onSubmit={handleSubmit} className="w-full space-y-4">
+            {screen === "create" ? (
+              <div className="relative">
+                <Input
+                  type="text"
+                  placeholder="Название группы"
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  className="h-14 rounded-2xl border-2 border-gray-200 bg-white text-center text-lg focus:border-blue-400 focus:ring-blue-400"
+                />
+              </div>
+            ) : (
+              <div className="relative">
+                <Users className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                <Input
+                  type="text"
+                  placeholder="______"
+                  value={code}
+                  onChange={(e) => {
+                    const value = e.target.value.toUpperCase().slice(0, 6)
+                    setCode(value)
+                    setError("")
+                  }}
+                  maxLength={6}
+                  className="h-14 rounded-2xl border-2 border-gray-200 bg-white pl-12 text-center font-mono text-2xl tracking-[0.5em] placeholder:tracking-[0.5em] focus:border-blue-400 focus:ring-blue-400"
+                />
+              </div>
+            )}
+            <Button
+              type="submit"
+              disabled={(screen === "create" ? !groupName.trim() : code.length !== 6) || isLoading}
+              className="h-14 w-full rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-500 text-lg font-semibold text-white shadow-lg transition-all hover:from-blue-600 hover:to-cyan-600 hover:shadow-xl disabled:opacity-50"
+            >
+              {isLoading ? "Подключение..." : screen === "create" ? "Создать группу" : "Присоединиться к семье"}
+            </Button>
+          </form>
+        )}
+
+        {error && (
+          <motion.p
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-3 text-center text-sm text-red-500"
           >
-            {isLoading ? "Подключение..." : "Присоединиться к семье"}
-          </Button>
+            {error}
+          </motion.p>
+        )}
 
+        {screen !== "choice" && (
+          <button type="button" onClick={() => setScreen("choice")} className="mt-4 text-xs text-gray-500 hover:underline">
+            Назад к выбору действия
+          </button>
+        )}
+
+        <div className="mt-4 w-full">
           <Button
             type="button"
             variant="outline"
@@ -103,12 +249,9 @@ export function JoinScreen() {
           >
             Dev Bypass
           </Button>
-        </form>
+        </div>
 
-        {/* Hint */}
-        <p className="mt-6 text-center text-xs text-gray-400">
-          Попросите код у создателя группы
-        </p>
+        <p className="mt-6 text-center text-xs text-gray-400">Попросите код у создателя группы</p>
         
       </motion.div>
     </div>
