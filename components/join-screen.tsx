@@ -11,7 +11,6 @@ import { getSupabase } from "@/lib/supabase"
 export function JoinScreen() {
   const [screen, setScreen] = useState<"choice" | "auth-create" | "auth-join" | "login" | "create" | "join">("choice")
   const [code, setCode] = useState("")
-  const [groupName, setGroupName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
@@ -79,7 +78,7 @@ export function JoinScreen() {
     setError("")
 
     if (screen === "create") {
-      const success = await createFamily(groupName)
+      const success = await createFamily()
       if (!success) setError(storeError || "Не удалось создать группу")
       return
     }
@@ -187,17 +186,7 @@ export function JoinScreen() {
 
         {(screen === "create" || screen === "join") && (
           <form onSubmit={handleSubmit} className="w-full space-y-4">
-            {screen === "create" ? (
-              <div className="relative">
-                <Input
-                  type="text"
-                  placeholder="Название группы"
-                  value={groupName}
-                  onChange={(e) => setGroupName(e.target.value)}
-                  className="h-14 rounded-2xl border-2 border-gray-200 bg-white text-center text-lg focus:border-blue-400 focus:ring-blue-400"
-                />
-              </div>
-            ) : (
+            {screen === "join" ? (
               <div className="relative">
                 <Users className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
                 <Input
@@ -213,10 +202,14 @@ export function JoinScreen() {
                   className="h-14 rounded-2xl border-2 border-gray-200 bg-white pl-12 text-center font-mono text-2xl tracking-[0.5em] placeholder:tracking-[0.5em] focus:border-blue-400 focus:ring-blue-400"
                 />
               </div>
+            ) : (
+              <p className="rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-center text-sm text-cyan-700">
+                Будет создана новая семейная группа
+              </p>
             )}
             <Button
               type="submit"
-              disabled={(screen === "create" ? !groupName.trim() : code.length !== 6) || isLoading}
+              disabled={(screen === "join" ? code.length !== 6 : false) || isLoading}
               className="h-14 w-full rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-500 text-lg font-semibold text-white shadow-lg transition-all hover:from-blue-600 hover:to-cyan-600 hover:shadow-xl disabled:opacity-50"
             >
               {isLoading ? "Подключение..." : screen === "create" ? "Создать группу" : "Присоединиться к семье"}

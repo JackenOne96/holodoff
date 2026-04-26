@@ -30,11 +30,21 @@ export const requestNotificationPermission = async (): Promise<NotificationPermi
   }
 }
 
-export const showNotification = async (title: string, options?: NotificationOptions): Promise<void> => {
+type SignalType = "alert" | "ok" | "store" | "ack"
+
+export const showNotification = async (
+  title: string,
+  options?: NotificationOptions,
+  signalType?: SignalType
+): Promise<void> => {
   if (typeof window === "undefined") return
   if (!("Notification" in window) || Notification.permission !== "granted") return
 
   if (!("serviceWorker" in navigator) || !navigator.serviceWorker.controller) return
   const registration = await navigator.serviceWorker.ready
-  await registration.showNotification(title, options)
+  const notificationOptions: NotificationOptions = {
+    ...options,
+    icon: signalType ? `/icons/signal-${signalType}.png` : options?.icon,
+  }
+  await registration.showNotification(title, notificationOptions)
 }

@@ -27,7 +27,21 @@ import { AcknowledgeButton } from "@/components/acknowledge-button"
 
 export default function HomePage() {
   const router = useRouter()
-  const { userName, setUserName, addToShopping, hasJoined, requiresPayment, initialize, isHydrated, isLoading, error, bypassLogin, incomingSignal, clearIncomingSignal } =
+  const {
+    userName,
+    setUserName,
+    addToShopping,
+    hasJoined,
+    requiresPayment,
+    initialize,
+    isHydrated,
+    isLoading,
+    error,
+    bypassLogin,
+    incomingSignal,
+    clearIncomingSignal,
+    needsProfileSetup,
+  } =
     useFridgeStore()
   const [mounted, setMounted] = useState(false)
   const [showNameModal, setShowNameModal] = useState(false)
@@ -59,10 +73,10 @@ export default function HomePage() {
   }, [mounted])
 
   useEffect(() => {
-    if (mounted && hasJoined && !userName) {
+    if (mounted && hasJoined && (needsProfileSetup || !userName)) {
       setShowNameModal(true)
     }
-  }, [mounted, userName, hasJoined])
+  }, [mounted, userName, hasJoined, needsProfileSetup])
 
   useEffect(() => {
     if (!mounted || !hasJoined) return

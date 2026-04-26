@@ -18,6 +18,7 @@ const userSounds: Record<string, number> = {
 }
 
 const SEND_SOUND_FREQUENCY = 980
+const getInitial = (value: string) => (value.trim().charAt(0) || "Я").toUpperCase()
 
 export function Chat() {
   const { messages, addMessage, userName, currentMemberId } = useFridgeStore()
@@ -64,7 +65,7 @@ export function Chat() {
       if (newMsg && !newMsg.isSystem && newMsg.senderId !== currentMemberId) {
         const settings = getSettings()
         if (settings.notificationsEnabled && settings.chatNotificationsEnabled) {
-          playTone(userSounds[newMsg.sender] || 523)
+          playTone(userSounds[getInitial(newMsg.sender)] || 523)
           // Push notification (only if enabled)
           const title = "ХолодOFF: новое сообщение"
           const body = `${newMsg.sender}: ${newMsg.text}`
@@ -127,7 +128,7 @@ export function Chat() {
                   return (
                     <div className={`flex max-w-[85%] gap-2 ${isMine ? "flex-row-reverse" : "flex-row"}`}>
                       <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-orange-400 to-pink-400 text-xs font-medium text-white">
-                        {message.senderAvatar || message.sender}
+                        {message.senderAvatar || getInitial(message.sender)}
                       </div>
                       <div className={`flex min-w-0 flex-col ${isMine ? "items-end" : "items-start"}`}>
                         <div

@@ -16,7 +16,7 @@ import { useFridgeStore } from "@/lib/store"
 import { SettingsModal } from "./settings-modal"
 
 export function FridgeHeader() {
-  const { familyCode, familyMembers, userName, familyName } = useFridgeStore()
+  const { familyCode, familyMembers, userName } = useFridgeStore()
   const [copied, setCopied] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
 
@@ -31,7 +31,7 @@ export function FridgeHeader() {
       <header className="grid h-[9%] min-h-[64px] grid-cols-3 items-center px-4 pt-2">
         <div className="flex items-center gap-2" />
         <div className="pt-1 text-center">
-          <span className="text-lg font-semibold text-gray-800">{familyName || "Холодильник"}</span>
+          <span className="text-lg font-semibold text-gray-800">Семейный холодильник</span>
         </div>
 
         <div className="flex items-center justify-end gap-2">

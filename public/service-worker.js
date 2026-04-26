@@ -7,9 +7,11 @@ self.addEventListener("push", (event) => {
   }
 
   const title = data.title || "ХолодOFF"
+  const signalType = data.signalType || (data.data && data.data.signalType)
+  const signalIcon = signalType ? `/icons/signal-${signalType}.png` : null
   const options = {
     body: data.body || "",
-    icon: data.icon || "/icon.svg",
+    icon: signalIcon || data.icon || "/icon.svg",
     badge: data.badge || "/icon.svg",
     tag: data.tag || "family-signal",
     data: data.data || {},

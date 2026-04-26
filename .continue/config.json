@@ -1,0 +1,23 @@
+{
+  "models": [
+    {
+      "title": "DeepSeek-Coder 6.7B",
+      "provider": "ollama",
+      "model": "deepseek-coder:6.7b",
+      "apiBase": "http://localhost:11434",
+      "supportsToolCall": false
+    }
+  ],
+  "tabAutocompleteModel": {
+    "title": "DeepSeek-Coder 6.7B",
+    "provider": "ollama",
+    "model": "deepseek-coder:6.7b",
+    "apiBase": "http://localhost:11434",
+    "supportsToolCall": false
+  },
+  "embeddingsProvider": {
+    "provider": "ollama",
+    "model": "deepseek-coder:6.7b",
+    "apiBase": "http://localhost:11434"
+  }
+}

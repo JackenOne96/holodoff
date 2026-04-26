@@ -91,7 +91,6 @@ export const getStorageKind = () => storageKind
 type DbFamily = {
   id: string
   invite_code: string
-  name: string | null
   trial_ends_at: string | null
   created_at: string
 }
@@ -188,6 +187,7 @@ interface FridgeState {
   isBypassMode: boolean
 
   userName: string | null
+  needsProfileSetup: boolean
   currentMemberId: string | null
   setUserName: (profile: UserProfileSetup) => Promise<boolean>
 
@@ -197,7 +197,7 @@ interface FridgeState {
   familyCode: string
   requiresPayment: boolean
   joinFamily: (code: string) => Promise<boolean>
-  createFamily: (name: string) => Promise<boolean>
+  createFamily: () => Promise<boolean>
   applyPromoCode: (code: string) => Promise<{ ok: boolean; message: string }>
   bypassLogin: () => void
   initialize: () => Promise<void>
@@ -272,13 +272,14 @@ const mapShoppingItems = (items: DbShoppingItem[], membersById: Map<string, DbFa
 const mapChatMessages = (messages: DbChatMessage[], membersById: Map<string, DbFamilyMember>): ChatMessage[] =>
   messages.map((message) => {
     const isSystem = message.text.startsWith(SYSTEM_MESSAGE_PREFIX)
+    const senderMember = membersById.get(message.sender_id || "")
+    const senderName = senderMember?.name || "Участник"
+    const senderLetter = getInitial(senderMember?.avatar_letter || senderMember?.name)
     return {
       id: message.id,
       text: isSystem ? message.text.slice(SYSTEM_MESSAGE_PREFIX.length) : message.text,
-      sender: isSystem
-        ? "Система"
-        : getInitial(membersById.get(message.sender_id || "")?.avatar_letter || membersById.get(message.sender_id || "")?.name),
-      senderAvatar: isSystem ? "⚠️" : membersById.get(message.sender_id || "")?.avatar_icon || "🙂",
+      sender: isSystem ? "Система" : senderName,
+      senderAvatar: isSystem ? "⚠️" : senderMember?.avatar_icon || senderLetter,
       senderId: message.sender_id,
       timestamp: message.created_at,
       isSystem,
@@ -473,7 +474,7 @@ const startRealtime = async (familyId: string, refresh: () => Promise<void>) => 
                 : "ХолодOFF: Ознакомился"
         const body = `${senderName} отправил(а) сигнал`
         playSignalTone(signalType)
-        void showNotification(title, { body, tag: `signal-${data.family_id}` })
+        void showNotification(title, { body, tag: `signal-${data.family_id}` }, signalType)
       }
     )
     .subscribe()
@@ -490,6 +491,7 @@ export const useFridgeStore = create<FridgeState>()(
       isBypassMode: false,
 
       userName: null,
+      needsProfileSetup: false,
       currentMemberId: null,
       familyId: null,
       familyName: "",
@@ -524,10 +526,11 @@ export const useFridgeStore = create<FridgeState>()(
         set({
           isBypassMode: true,
           hasJoined: true,
-          userName: "Тест",
+          userName: null,
+          needsProfileSetup: true,
           currentMemberId: "dev-member",
           familyId: null,
-          familyName: "Dev family",
+          familyName: "Семейный холодильник",
           familyCode: "DEV123",
           requiresPayment: false,
           familyMembers: [
@@ -535,7 +538,7 @@ export const useFridgeStore = create<FridgeState>()(
               id: "dev-member",
               name: "Тест",
               initial: "Т",
-              avatar: "🙂",
+              avatar: "Т",
               gender: null,
               color: AVATAR_COLORS[0],
             },
@@ -576,7 +579,7 @@ export const useFridgeStore = create<FridgeState>()(
 
             const { data: memberData } = await supabase
               .from("family_members")
-              .select("id, family_id")
+              .select("id, family_id, name, gender, avatar_icon")
               .eq("auth_user_id", user.id)
               .order("created_at", { ascending: false })
               .limit(1)
@@ -598,9 +601,10 @@ export const useFridgeStore = create<FridgeState>()(
               ...freshData,
               familyId: memberData.family_id,
               familyCode: family?.invite_code || "",
-              familyName: family?.name || "Семейная группа",
+              familyName: "Семейный холодильник",
               currentMemberId: memberData.id,
-              userName: currentMember?.name || user.email?.split("@")[0] || "Пользователь",
+              userName: memberData.name || currentMember?.name || user.email?.split("@")[0] || "Пользователь",
+              needsProfileSetup: !memberData.name?.trim() || !memberData.gender || !memberData.avatar_icon,
               hasJoined: true,
               requiresPayment: false,
               isHydrated: true,
@@ -618,11 +622,11 @@ export const useFridgeStore = create<FridgeState>()(
         set({ isLoading: true, error: null })
         try {
           const freshData = await loadFamilyData(familyId)
-          const { data: familyData } = await supabase.from("families").select("name,invite_code").eq("id", familyId).single()
+          const { data: familyData } = await supabase.from("families").select("invite_code").eq("id", familyId).single()
           await startRealtime(familyId, get().refreshFamilyData)
           set({
             ...freshData,
-            familyName: familyData?.name || get().familyName || "Семейная группа",
+            familyName: "Семейный холодильник",
             familyCode: familyData?.invite_code || get().familyCode,
             isLoading: false,
             isHydrated: true,
@@ -708,13 +712,13 @@ export const useFridgeStore = create<FridgeState>()(
 
         const { data: existingMemberByAuth } = await supabase
           .from("family_members")
-          .select("id")
+          .select("id,name,gender,avatar_icon")
           .eq("family_id", family.id)
           .eq("auth_user_id", user.id)
           .maybeSingle()
 
         let memberId = existingMemberByAuth?.id || null
-        let memberName = formatDisplayName(user.user_metadata?.name || user.email?.split("@")[0] || "Участник")
+        const memberName = formatDisplayName(user.user_metadata?.name || user.email?.split("@")[0] || "Участник")
         if (!memberId) {
           const { data: insertedMember, error: insertMemberError } = await supabase
             .from("family_members")
@@ -722,7 +726,7 @@ export const useFridgeStore = create<FridgeState>()(
               family_id: family.id,
               auth_user_id: user.id,
               name: memberName,
-              avatar_icon: "🙂",
+              avatar_icon: null,
               gender: null,
             })
             .select("id,name")
@@ -733,21 +737,24 @@ export const useFridgeStore = create<FridgeState>()(
             return false
           }
           memberId = insertedMember.id
-          memberName = insertedMember.name
         }
 
         try {
           const freshData = await loadFamilyData(family.id)
           await startRealtime(family.id, get().refreshFamilyData)
           void requestNotificationPermission()
+          const hasProfile = Boolean(
+            existingMemberByAuth?.name?.trim() && existingMemberByAuth?.gender && existingMemberByAuth?.avatar_icon
+          )
           set({
             ...freshData,
             familyId: family.id,
-            familyName: family.name || "Семейная группа",
+            familyName: "Семейный холодильник",
             familyCode: family.invite_code,
             hasJoined: true,
             currentMemberId: memberId,
-            userName: memberName,
+            userName: hasProfile ? existingMemberByAuth?.name || null : null,
+            needsProfileSetup: !hasProfile,
             requiresPayment: false,
             isLoading: false,
             error: null,
@@ -762,14 +769,9 @@ export const useFridgeStore = create<FridgeState>()(
         }
       },
 
-      createFamily: async (name: string) => {
+      createFamily: async () => {
         const supabase = getSupabase()
         if (!supabase) return false
-        const familyName = name.trim()
-        if (!familyName) {
-          set({ error: "Введите название группы" })
-          return false
-        }
 
         set({ isLoading: true, error: null })
         const { data: sessionData } = await supabase.auth.getSession()
@@ -784,7 +786,6 @@ export const useFridgeStore = create<FridgeState>()(
           .from("families")
           .insert({
             invite_code: inviteCode,
-            name: familyName,
             created_by: user.id,
           })
           .select("*")
@@ -802,7 +803,7 @@ export const useFridgeStore = create<FridgeState>()(
             family_id: createdFamily.id,
             auth_user_id: user.id,
             name: defaultName,
-            avatar_icon: "🙂",
+            avatar_icon: null,
             gender: null,
           })
           .select("*")
@@ -819,11 +820,12 @@ export const useFridgeStore = create<FridgeState>()(
         set({
           ...freshData,
           familyId: createdFamily.id,
-          familyName: createdFamily.name || familyName,
+          familyName: "Семейный холодильник",
           familyCode: createdFamily.invite_code,
           hasJoined: true,
           currentMemberId: createdMember.id,
-          userName: createdMember.name,
+          userName: null,
+          needsProfileSetup: true,
           requiresPayment: true,
           isLoading: false,
           error: null,
@@ -846,11 +848,12 @@ export const useFridgeStore = create<FridgeState>()(
 
       setUserName: async (profile: UserProfileSetup) => {
         const supabase = getSupabase()
-        const { familyId, familyMembers, isBypassMode } = get()
+        const { familyId, isBypassMode } = get()
         const trimmedName = formatDisplayName(profile.name)
         if (isBypassMode) {
           set({
             userName: trimmedName,
+            needsProfileSetup: false,
             familyMembers: [
               {
                 id: "dev-member",
@@ -877,34 +880,51 @@ export const useFridgeStore = create<FridgeState>()(
 
         set({ isLoading: true, error: null })
 
-        const { count: membersCount, error: membersCountError } = await supabase
+        const { data: existingMember, error: existingMemberError } = await supabase
           .from("family_members")
-          .select("*", { count: "exact", head: true })
+          .select("id")
           .eq("family_id", familyId)
+          .eq("auth_user_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
 
-        if (membersCountError) {
+        if (existingMemberError) {
           set({
             isLoading: false,
-            error: membersCountError.message,
+            error: existingMemberError.message,
           })
           return false
         }
 
-        if ((membersCount ?? 0) >= FAMILY_MEMBER_LIMIT) {
-          set({
-            isLoading: false,
-            error: `Достигнут лимит участников (${FAMILY_MEMBER_LIMIT} человека)`,
-          })
-          return false
-        }
+        if (existingMember?.id) {
+          const { data: updatedMember, error: updateError } = await supabase
+            .from("family_members")
+            .update({
+              name: trimmedName,
+              gender: profile.gender,
+              avatar_icon: profile.avatar,
+              avatar_letter: getInitial(trimmedName),
+            })
+            .eq("id", existingMember.id)
+            .select("*")
+            .single()
 
-        const existingMember = familyMembers.find((member) => member.name.toLowerCase() === trimmedName.toLowerCase())
+          if (updateError || !updatedMember) {
+            set({
+              isLoading: false,
+              error: updateError?.message || "Не удалось обновить профиль участника",
+            })
+            return false
+          }
 
-        if (existingMember) {
+          await get().refreshFamilyData()
           set({
-            userName: existingMember.name,
-            currentMemberId: existingMember.id,
+            userName: updatedMember.name,
+            currentMemberId: updatedMember.id,
+            needsProfileSetup: false,
             isLoading: false,
+            error: null,
           })
           return true
         }
@@ -917,6 +937,7 @@ export const useFridgeStore = create<FridgeState>()(
             name: trimmedName,
             gender: profile.gender,
             avatar_icon: profile.avatar,
+            avatar_letter: getInitial(trimmedName),
           })
           .select("*")
           .single()
@@ -934,6 +955,7 @@ export const useFridgeStore = create<FridgeState>()(
         set({
           userName: createdMember.name,
           currentMemberId: createdMember.id,
+          needsProfileSetup: false,
           isLoading: false,
           error: null,
         })
@@ -1106,6 +1128,7 @@ export const useFridgeStore = create<FridgeState>()(
           error: null,
           isBypassMode: false,
           userName: null,
+          needsProfileSetup: false,
           currentMemberId: null,
           hasJoined: false,
           familyId: null,
@@ -1157,7 +1180,7 @@ export const useFridgeStore = create<FridgeState>()(
                 id: `dev-msg-${Date.now()}`,
                 text,
                 sender: isSystem ? "Система" : getInitial(userName || "Т"),
-                senderAvatar: isSystem ? "⚠️" : "🙂",
+                senderAvatar: isSystem ? "⚠️" : getInitial(userName || "Т"),
                 senderId: isSystem ? null : currentMemberId || "dev-member",
                 timestamp: new Date().toISOString(),
                 isSystem,
@@ -1192,6 +1215,7 @@ export const useFridgeStore = create<FridgeState>()(
       partialize: (state) => ({
         isBypassMode: state.isBypassMode,
         userName: state.userName,
+        needsProfileSetup: state.needsProfileSetup,
         currentMemberId: state.currentMemberId,
         familyId: state.familyId,
         familyName: state.familyName,
