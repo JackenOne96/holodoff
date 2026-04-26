@@ -937,7 +937,6 @@ export const useFridgeStore = create<FridgeState>()(
             name: trimmedName,
             gender: profile.gender,
             avatar_icon: profile.avatar,
-            avatar_letter: getInitial(trimmedName),
           })
           .select("*")
           .single()
