@@ -30,9 +30,7 @@ export function FridgeHeader() {
     <>
       <header className="grid h-[9%] min-h-[64px] grid-cols-3 items-center px-4 pt-2">
         <div className="flex items-center gap-2" />
-        <div className="pt-1 text-center">
-          <span className="text-lg font-semibold text-gray-800">Семейный холодильник</span>
-        </div>
+        <div className="pt-1 text-center" aria-hidden="true" />
 
         <div className="flex items-center justify-end gap-2">
           {/* Family members avatars */}
