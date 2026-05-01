@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
 import { Users, RefrigeratorIcon, PlusCircle, KeyRound } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -16,7 +16,63 @@ export function JoinScreen() {
   const [error, setError] = useState("")
   const { joinFamily, createFamily, bypassLogin, isLoading, error: storeError } = useFridgeStore()
 
-  const showSoon = () => window.alert("Скоро появится")
+  useEffect(() => {
+    const supabase = getSupabase()
+    if (!supabase) return
+
+    const rawFlow = window.localStorage.getItem("postAuthTarget") || new URLSearchParams(window.location.search).get("auth_flow")
+    if (!rawFlow) return
+
+    const target = rawFlow === "create" ? "create" : "join"
+
+    let isCancelled = false
+    const continueAfterOAuth = async () => {
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (isCancelled || !sessionData.session?.user) return
+
+      setError("")
+      setScreen(target)
+      window.localStorage.removeItem("postAuthTarget")
+
+      const params = new URLSearchParams(window.location.search)
+      if (params.has("auth_flow")) {
+        params.delete("auth_flow")
+        const query = params.toString()
+        const nextUrl = `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`
+        window.history.replaceState({}, "", nextUrl)
+      }
+    }
+
+    void continueAfterOAuth()
+    return () => {
+      isCancelled = true
+    }
+  }, [])
+
+  const signInWithYandex = async (target: "create" | "join") => {
+    const supabase = getSupabase()
+    if (!supabase) {
+      setError("Supabase env не настроен")
+      return
+    }
+
+    setError("")
+    window.localStorage.setItem("postAuthTarget", target)
+    const redirectTo = `${window.location.origin}/?auth_flow=${target}`
+    const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider: "custom:yandex",
+      options: { redirectTo },
+    })
+
+    if (oauthError) {
+      setError(oauthError.message)
+      return
+    }
+
+    if (data?.url) {
+      window.location.href = data.url
+    }
+  }
 
   const signUpWithEmail = async () => {
     const supabase = getSupabase()
@@ -174,10 +230,19 @@ export function JoinScreen() {
               {screen === "login" ? "Войти" : "Зарегистрироваться"}
             </Button>
             <div className="grid grid-cols-1 gap-2">
-              <Button type="button" variant="outline" onClick={showSoon}>
-                Войти через VK ID
-              </Button>
-              <Button type="button" variant="outline" onClick={showSoon}>
+              <Button
+                type="button"
+                onClick={() => void signInWithYandex(screen === "auth-create" ? "create" : "join")}
+                className="h-12 rounded-xl bg-black text-white hover:bg-black/90"
+              >
+                <span
+                  aria-hidden="true"
+                  className="mr-2 h-5 w-5 rounded-sm bg-white bg-center bg-no-repeat"
+                  style={{
+                    backgroundImage: "url('https://yastatic.net/s3/home-static/_/b/be/YandexLogo.svg')",
+                    backgroundSize: "14px 14px",
+                  }}
+                />
                 Войти через Яндекс ID
               </Button>
             </div>
