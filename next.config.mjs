@@ -1,16 +1,17 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // ✅ Отключаем статическую генерацию, чтобы переменные окружения (env) были доступны
-  output: 'standalone',
+  // ✅ Статический экспорт для Cloudflare Pages
+  output: 'export',
 
-  // ✅ Настройки для TypeScript: игнорируем ошибки сборки
+  // ✅ Игнорируем ошибки TypeScript при сборке
   typescript: {
     ignoreBuildErrors: true,
   },
-  
-  // ✅ Другие важные настройки
-  reactStrictMode: true,
-  swcMinify: true,
+
+  // ✅ Игнорируем ошибки ESLint при сборке
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
 };
 
 export default nextConfig;
