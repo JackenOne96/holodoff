@@ -24,12 +24,6 @@ export function JoinScreen() {
       return
     }
 
-    const getPostAuthTarget = () => {
-      const rawFlow = window.localStorage.getItem("postAuthTarget") || new URLSearchParams(window.location.search).get("auth_flow")
-      if (!rawFlow) return null
-      return rawFlow === "create" ? "create" : "join"
-    }
-
     const clearPostAuthUrlState = () => {
       window.localStorage.removeItem("postAuthTarget")
       const params = new URLSearchParams(window.location.search)
@@ -43,7 +37,6 @@ export function JoinScreen() {
 
     let isCancelled = false
     const resolveSessionRouting = async () => {
-      const target = getPostAuthTarget()
       const { data: sessionData } = await supabase.auth.getSession()
       if (isCancelled) return
 
@@ -54,18 +47,33 @@ export function JoinScreen() {
       }
 
       setError("")
-      await initialize()
+      const { data: memberData, error: memberError } = await supabase
+        .from("family_members")
+        .select("id,family_id")
+        .eq("auth_user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (memberError) {
+        setError(memberError.message)
+        setIsAuthResolving(false)
+        return
+      }
+
+      if (memberData?.family_id) {
+        await initialize()
+      }
       if (isCancelled) return
 
-      const hasJoinedFamily = useFridgeStore.getState().hasJoined
-      if (hasJoinedFamily) {
+      if (memberData?.family_id) {
         clearPostAuthUrlState()
         setIsAuthResolving(false)
         return
       }
 
-      setScreen(target ?? "create")
-      if (target) clearPostAuthUrlState()
+      setScreen("create")
+      clearPostAuthUrlState()
       setIsAuthResolving(false)
     }
 
