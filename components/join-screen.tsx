@@ -14,26 +14,24 @@ export function JoinScreen() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
-  const { joinFamily, createFamily, bypassLogin, isLoading, error: storeError } = useFridgeStore()
+  const [isAuthResolving, setIsAuthResolving] = useState(true)
+  const { joinFamily, createFamily, bypassLogin, isLoading, error: storeError, initialize } = useFridgeStore()
 
   useEffect(() => {
     const supabase = getSupabase()
-    if (!supabase) return
+    if (!supabase) {
+      setIsAuthResolving(false)
+      return
+    }
 
-    const rawFlow = window.localStorage.getItem("postAuthTarget") || new URLSearchParams(window.location.search).get("auth_flow")
-    if (!rawFlow) return
+    const getPostAuthTarget = () => {
+      const rawFlow = window.localStorage.getItem("postAuthTarget") || new URLSearchParams(window.location.search).get("auth_flow")
+      if (!rawFlow) return null
+      return rawFlow === "create" ? "create" : "join"
+    }
 
-    const target = rawFlow === "create" ? "create" : "join"
-
-    let isCancelled = false
-    const continueAfterOAuth = async () => {
-      const { data: sessionData } = await supabase.auth.getSession()
-      if (isCancelled || !sessionData.session?.user) return
-
-      setError("")
-      setScreen(target)
+    const clearPostAuthUrlState = () => {
       window.localStorage.removeItem("postAuthTarget")
-
       const params = new URLSearchParams(window.location.search)
       if (params.has("auth_flow")) {
         params.delete("auth_flow")
@@ -43,11 +41,49 @@ export function JoinScreen() {
       }
     }
 
-    void continueAfterOAuth()
+    let isCancelled = false
+    const resolveSessionRouting = async () => {
+      const target = getPostAuthTarget()
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (isCancelled) return
+
+      const user = sessionData.session?.user
+      if (!user) {
+        setIsAuthResolving(false)
+        return
+      }
+
+      setError("")
+      await initialize()
+      if (isCancelled) return
+
+      const hasJoinedFamily = useFridgeStore.getState().hasJoined
+      if (hasJoinedFamily) {
+        clearPostAuthUrlState()
+        setIsAuthResolving(false)
+        return
+      }
+
+      setScreen(target ?? "create")
+      if (target) clearPostAuthUrlState()
+      setIsAuthResolving(false)
+    }
+
+    void resolveSessionRouting()
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session?.user) return
+      if (event !== "SIGNED_IN" && event !== "INITIAL_SESSION") return
+      void resolveSessionRouting()
+    })
+
     return () => {
       isCancelled = true
+      subscription.unsubscribe()
     }
-  }, [])
+  }, [initialize])
 
   const signInWithYandex = async (target: "create" | "join") => {
     const supabase = getSupabase()
@@ -153,6 +189,14 @@ export function JoinScreen() {
         setError(storeError || "Неверный код. Попробуйте снова.")
       }
     }
+  }
+
+  if (isAuthResolving) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-blue-100 to-cyan-100 px-6">
+        <p className="text-sm text-gray-500">Проверка входа...</p>
+      </div>
+    )
   }
 
   return (
